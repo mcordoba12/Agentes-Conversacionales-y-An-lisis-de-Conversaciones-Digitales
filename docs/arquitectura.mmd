@@ -1,0 +1,76 @@
+graph TB
+    subgraph INTERFACE["⌨️ INTERFAZ - USUARIO"]
+        User["👤 Usuario Final"]
+        CLI["CLI Interface<br/>Terminal Input/Output"]
+    end
+
+    User -->|pregunta natural| CLI
+    CLI -->|texto| StateGraph
+
+    subgraph AGENT["🧠 AGENTE CONVERSACIONAL - LANGGRAPH"]
+        StateGraph["StateGraph<br/>Tool Router"]
+        Memory["Memory Buffer<br/>Últimos 6 turnos"]
+        StateGraph --> Memory
+        Memory --> StateGraph
+    end
+
+    StateGraph -->|HTTP GET| MCP_LAYER
+
+    subgraph MCP_LAYER["🔧 MICROSERVICIOS - FASTAPI"]
+        subgraph MCP1["📊 Sentiment MCP<br/>:8001"]
+            S_API["GET /analisis/sentimiento"]
+            S_CACHE["Cache RAM"]
+            S_API --> S_CACHE
+            S_CACHE --> S_API
+        end
+
+        subgraph MCP2["⭐ Influence MCP<br/>:8002"]
+            I_API["GET /analisis/metricas"]
+            I_CACHE["Cache RAM"]
+            I_API --> I_CACHE
+            I_CACHE --> I_API
+        end
+
+        subgraph MCP3["🌳 Propagation MCP<br/>:8003"]
+            P_API["GET /analisis/propagacion"]
+            P_CACHE["Cache RAM"]
+            P_API --> P_CACHE
+            P_CACHE --> P_API
+        end
+    end
+
+    MCP1 -->|JSON| StateGraph
+    MCP2 -->|JSON| StateGraph
+    MCP3 -->|JSON| StateGraph
+
+    MCP_LAYER --> DATA_LAYER
+    DATA_LAYER --> MCP_LAYER
+
+    subgraph DATA_LAYER["📁 CAPA DE DATOS"]
+        Loader["Singleton DataLoader<br/>Carga una sola vez"]
+        Parquet[["Parquet Dataset<br/>4795 rows - 72 cols"]]
+        Loader -->|pd.read_parquet| Parquet
+    end
+
+    StateGraph -->|construye prompt| LLM_LAYER
+
+    subgraph LLM_LAYER["🤖 LLM - OPENAI"]
+        LLM["GPT-4o-mini<br/>Routing + Formatting"]
+    end
+
+    LLM_LAYER -->|respuesta formatted| StateGraph
+    StateGraph -->|actualiza memory| Memory
+    StateGraph -->|texto conversacional| CLI
+    CLI -->|respuesta| User
+
+    classDef interface fill:#E3F2FD,stroke:#1976D2,stroke-width:2px,color:#000
+    classDef agent fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#000
+    classDef mcp fill:#E8F5E9,stroke:#388E3C,stroke-width:2px,color:#000
+    classDef data fill:#F1F8E9,stroke:#558B2F,stroke-width:2px,color:#000
+    classDef llm fill:#FFF3E0,stroke:#E65100,stroke-width:2px,color:#000
+
+    class User,CLI interface
+    class StateGraph,Memory agent
+    class S_API,S_CACHE,I_API,I_CACHE,P_API,P_CACHE,MCP1,MCP2,MCP3 mcp
+    class Loader,Parquet data
+    class LLM llm

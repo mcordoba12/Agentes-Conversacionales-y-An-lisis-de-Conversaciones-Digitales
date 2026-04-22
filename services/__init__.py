@@ -1,0 +1,1 @@
+"""Microservices (MCP) - FastAPI services"""

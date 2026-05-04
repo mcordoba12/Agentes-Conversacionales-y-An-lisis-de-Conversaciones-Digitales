@@ -9,10 +9,20 @@ pydantic>=2.0.0
 requests>=2.31.0
 
 # LLM & Agents (using latest stable versions with wheels)
+langchain>=0.1.0              # Phase 1: @tool decorators support
 langchain-core>=0.1.0
 langgraph>=0.0.20
 openai>=1.0.0
 langchain-openai>=0.0.5
+langchain-ollama>=0.1.0       # Phase 5: Transfer Learning - Free local Llama inference
+
+# Vector Stores & Embeddings (Phase 3: Long-Term Memory)
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+
+# Observability & Evaluation (Phase 4)
+ragas>=0.1.0
+datasets>=2.14.0
 
 # Utils
 python-dotenv>=1.0.0

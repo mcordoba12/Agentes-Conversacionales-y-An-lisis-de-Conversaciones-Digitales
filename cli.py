@@ -37,10 +37,16 @@ Ejemplos de preguntas:
   "¿Quién escribió el post más comentado?"
 
 Comandos:
-  exit     - Salir
-  reset    - Nueva conversacion
-  help     - Mostrar este mensaje
-  history  - Ver historial
+  exit      - Salir
+  reset     - Nueva conversacion
+  help      - Mostrar este mensaje
+  history   - Ver historial
+  provider  - Ver/cambiar proveedor de LLM (Phase 5)
+  costs     - Mostrar análisis de costos y tokens (FinOps)
+  memory    - Ver estadísticas de memoria long-term
+  memclear  - Limpiar memoria de esta sesión
+  metrics   - Ver métricas de rendimiento (Observability)
+  eval      - Ver evaluación de calidad (Ragas)
 
 ================================================================================
 """
@@ -51,6 +57,12 @@ Comandos disponibles:
   reset           - Iniciar nueva conversacion
   help            - Mostrar este mensaje
   history         - Ver historial de conversacion
+  provider        - Ver proveedor LLM actual y cómo cambiar (Phase 5)
+  costs           - Mostrar análisis de costos y tokens (FinOps)
+  memory          - Ver estadísticas de memoria long-term
+  memclear        - Limpiar memoria de esta sesión
+  metrics         - Ver métricas de rendimiento (latencias, tool distribution)
+  eval            - Ver evaluación de calidad de respuestas (Ragas)
 
 Tipos de preguntas que puedes hacer:
   Propagacion:    "¿Cómo se propagó el post XYZ?"
@@ -151,6 +163,43 @@ def main():
                 print(HELP_MESSAGE)
                 continue
 
+            elif user_input.lower() == "provider":
+                from agent.llm_factory import get_provider_info
+                info = get_provider_info()
+                print("\n" + "="*80)
+                print("LLM PROVIDER CONFIGURATION (Phase 5)")
+                print("="*80)
+                print(f"Provider:  {info.get('provider', 'unknown').upper()}")
+                print(f"Model:     {info.get('model', 'unknown')}")
+                print(f"Temp:      {info.get('temperature', 0.7)}")
+                print(f"Cost Input:  {info.get('cost_input', 'N/A')}")
+                print(f"Cost Output: {info.get('cost_output', 'N/A')}")
+
+                if info.get('provider') == 'ollama':
+                    print(f"URL:       {info.get('base_url', 'N/A')}")
+
+                print("\nTo switch providers:")
+                print("  1. Edit .env file:")
+                if info.get('provider') == 'openai':
+                    print("     LLM_PROVIDER=ollama")
+                else:
+                    print("     LLM_PROVIDER=openai")
+                print("  2. Restart the agent\n")
+
+                if info.get('provider') == 'openai':
+                    print("To use Ollama (FREE, local):")
+                    print("  1. Install: https://ollama.com")
+                    print("  2. Run: ollama pull llama3.1:8b")
+                    print("  3. Set LLM_PROVIDER=ollama in .env")
+                    print("  4. Restart the agent\n")
+                else:
+                    print("Using Ollama (local, free). Current setup:")
+                    print("  Make sure Ollama is running: ollama serve")
+                    print("  To switch back to OpenAI: LLM_PROVIDER=openai\n")
+
+                print("="*80 + "\n")
+                continue
+
             elif user_input.lower() == "history":
                 history = agent.get_conversation_history()
                 if history:
@@ -163,12 +212,44 @@ def main():
                     print("[No hay historial aun]\n")
                 continue
 
+            elif user_input.lower() == "costs":
+                report = agent.get_cost_report()
+                print(report)
+                continue
+
+            elif user_input.lower() == "memory":
+                stats = agent.get_memory_stats()
+                print(stats)
+                continue
+
+            elif user_input.lower() == "memclear":
+                result = agent.clear_long_term_memory(session_only=True)
+                print(f"[Memory] {result}")
+                continue
+
+            elif user_input.lower() == "metrics":
+                report = agent.get_metrics_report()
+                print(report)
+                continue
+
+            elif user_input.lower() == "eval":
+                report = agent.get_eval_report()
+                print(report)
+                continue
+
             # Procesar pregunta del usuario
             print("\n[Procesando...]")
 
             try:
                 response = agent.chat(user_input)
                 print(format_response(response))
+
+                # FinOps: Mostrar línea de costo (Phase 2)
+                if config.FINOPS_ENABLED and agent.cost_tracker:
+                    tokens = agent.last_query_tokens
+                    q_cost = agent.cost_tracker.get_query_cost(tokens["input"], tokens["output"])
+                    s_cost = agent.cost_tracker.session_cost
+                    print(f"[Cost] Query: ${q_cost:.4f} | Session: ${s_cost:.4f} | Tokens: {tokens['total']}")
 
                 turn_count += 1
 

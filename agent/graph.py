@@ -5,16 +5,25 @@ Define el flujo del agente y la orquestacion de tools
 
 import json
 import re
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List, Union, Callable
 
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
-from langchain_openai import ChatOpenAI
 
 from .state import AgentStateDict
+from .llm_factory import create_llm
 from .memory import ConversationalMemory
-from .tools import execute_tool, TOOLS_SCHEMA
+from .tools import TOOLS, execute_tool, TOOLS_SCHEMA
+from .prompts import get_route_system_prompt, get_react_system_prompt, get_generate_system_prompt
+from .cost_tracker import CostTracker
+from .memory_backends import create_memory_backend
+from observability import LocalTracer, RagasEvaluator
+from security.injection_detector import detect_prompt_injection, get_injection_severity, RateLimiter
+from security.pii_detector import mask_sensitive_data, detect_pii, load_usernames_from_loader
+from security.audit_logger import AuditLogger
 import config
+import uuid
+import time
 
 
 # ==============================================================================
@@ -182,14 +191,13 @@ def detect_metrics_intent(message: str) -> bool:
 
 
 # ==============================================================================
-# INICIALIZAR LLM
+# INICIALIZAR LLM CON TOOLS (Native Tool Calling + Phase 5 Factory)
 # ==============================================================================
 
-llm = ChatOpenAI(
-    model=config.LLM_MODEL,
-    temperature=config.LLM_TEMPERATURE,
-    api_key=config.OPENAI_API_KEY
-)
+llm = create_llm()
+
+# Bind tools natively (no más regex parsing)
+llm_with_tools = llm.bind_tools(TOOLS)
 
 
 # ==============================================================================
@@ -199,25 +207,72 @@ llm = ChatOpenAI(
 def node_process_input(state: AgentStateDict) -> AgentStateDict:
     """
     Nodo 1: Procesar entrada del usuario
-    - Agregar mensaje a memoria
-    - Preparar contexto
+    - Detectar inyecciones de prompt
+    - Detectar PII
+    - Preparar contexto para el siguiente nodo
     """
-    # El mensaje ya esta en state["messages"]
-    # Solo preparamos el estado para el siguiente nodo
+    messages: List[BaseMessage] = state.get("messages", [])
+
+    if not messages:
+        return state
+
+    # Obtener último mensaje del usuario
+    last_user_message = None
+    for msg in reversed(messages):
+        if isinstance(msg, HumanMessage):
+            last_user_message = msg.content
+            break
+
+    if not last_user_message:
+        return state
+
+    # ===========================================================================
+    # SEGURIDAD: DETECCIÓN DE INYECCIONES
+    # ===========================================================================
+
+    has_injection = detect_prompt_injection(last_user_message)
+    injection_severity = get_injection_severity(last_user_message) if has_injection else "SAFE"
+
+    # Si hay inyección de severidad alta, bloquear
+    if injection_severity == "HIGH":
+        error_msg = "Security: Suspicious input detected and blocked. Please rephrase your question."
+        state["messages"].append(AIMessage(content=error_msg))
+        state["security_block"] = True
+        return state
+
+    # Guardar información de seguridad en el estado
+    state["security_info"] = {
+        "has_injection": has_injection,
+        "injection_severity": injection_severity,
+    }
+
+    # ===========================================================================
+    # SEGURIDAD: DETECCIÓN DE PII
+    # ===========================================================================
+
+    pii_found = detect_pii(last_user_message)
+    has_pii = any(pii_found.values())
+
+    if has_pii:
+        state["security_info"]["pii_detected"] = True
+        state["security_info"]["pii_types"] = pii_found
+    else:
+        state["security_info"]["pii_detected"] = False
+
     return state
 
 
 def node_route_to_tool(state: AgentStateDict) -> AgentStateDict:
     """
-    Nodo 2: Determinar si necesita una herramienta
+    Nodo 2: Determinar si necesita una herramienta (Native Tool Calling)
 
     Lógica mejorada de routing:
     1. Primero detecta intenciones específicas (ej: sentimiento general)
-    2. Luego llama al LLM para routing genérico
+    2. Luego llama al LLM con .bind_tools() para native tool calling
 
     Retorna:
-    - Si usa tool: state actualizado
-    - Si no usa tool: ir a response_generator
+    - Si usa tool: state actualizado con tool_call
+    - Si no usa tool: AIMessage agregado al state
     """
     messages: List[BaseMessage] = state.get("messages", [])
 
@@ -242,7 +297,8 @@ def node_route_to_tool(state: AgentStateDict) -> AgentStateDict:
     if detect_sentiment_intent(last_user_message):
         state["last_tool_result"] = {
             "tool_name": "analyze_sentiment",
-            "input": {}  # Sin parámetros - análisis global
+            "input": {},
+            "is_tool_call": True
         }
         return state
 
@@ -250,73 +306,48 @@ def node_route_to_tool(state: AgentStateDict) -> AgentStateDict:
     if detect_metrics_intent(last_user_message):
         state["last_tool_result"] = {
             "tool_name": "get_influence_metrics",
-            "input": {}  # Sin parámetros - análisis global de métricas
+            "input": {},
+            "is_tool_call": True
         }
         return state
 
     # ===========================================================================
-    # ROUTING GENÉRICO CON LLM
+    # ROUTING GENÉRICO CON LLM - NATIVE TOOL CALLING (NO MÁS REGEX)
     # ===========================================================================
 
-    # Construir prompt del sistema con reglas explícitas
-    system_prompt = f"""You are a helpful conversational agent that analyzes digital conversations.
-
-Available tools:
-{json.dumps(TOOLS_SCHEMA, indent=2)}
-
-ROUTING RULES - Sigue estas reglas ESTRICTAMENTE:
-
-1. **SENTIMENT ANALYSIS RULES**:
-   - Si el usuario pregunta por sentimiento general (sin texto específico) → NUNCA llames herramienta, debería haberlo hecho antes
-   - Si el usuario proporciona un texto específico → responde sin herramienta (no tienes API para analizar textos específicos)
-   - Ejemplo: "¿Cómo está el sentimiento?" → Ya procesado antes
-   - Ejemplo: "¿Sentimiento de este texto?" → Responde conversacionalmente
-
-2. **PROPAGATION RULES**:
-   - Requiere post_id específico
-   - Si el usuario proporciona un ID → llama trace_propagation
-   - Si no hay ID → pide al usuario el ID del post
-
-3. **INFLUENCE RULES**:
-   - No requiere parámetros
-   - Llama get_influence_metrics solo si el usuario pregunta por influencia, métricas, autores, posts populares
-
-4. **DEFAULT**:
-   - Si no necesita herramienta → responde directamente
-   - Siempre responde en Spanish
-
-When calling a tool, format it as:
-TOOL_CALL: {{"tool_name": "...", "input": {{...}}}}
-
-Current context:
-- Recent messages: {len(messages)} messages in history
-- Current topic: {state.get('current_topic', 'general')}"""
+    system_prompt = get_route_system_prompt(TOOLS_SCHEMA, len(messages), state.get("current_topic", "general"))
 
     try:
-        # Llamar al LLM con tool definitions
-        response = llm.invoke([
-            {"role": "system", "content": system_prompt},
-            *[{"role": msg.type, "content": msg.content} for msg in messages[-4:]]
-        ])
+        # Llamar al LLM CON tools nativas (NO más TOOL_CALL regex)
+        response = llm_with_tools.invoke(
+            messages[-4:] if len(messages) > 4 else messages,
+            system_message=system_prompt
+        )
 
-        response_text = response.content
+        # ===========================================================================
+        # FINOPS: CAPTURAR TOKENS (Phase 2)
+        # ===========================================================================
+        usage = response.response_metadata.get("token_usage", {}) if hasattr(response, "response_metadata") else {}
+        if usage:
+            state.setdefault("token_usage", []).append({
+                "call": "route",
+                "model": config.LLM_MODEL,
+                "input": usage.get("prompt_tokens", 0),
+                "output": usage.get("completion_tokens", 0),
+            })
 
-        # Detectar si hay un tool call
-        tool_call_match = re.search(r'TOOL_CALL:\s*(\{.*?\})', response_text, re.DOTALL)
-
-        if tool_call_match:
-            try:
-                tool_call = json.loads(tool_call_match.group(1))
-                state["last_tool_result"] = {
-                    "tool_name": tool_call.get("tool_name"),
-                    "input": tool_call.get("input")
-                }
-            except json.JSONDecodeError:
-                # Si falla el parsing, ir a response sin tool
-                state["messages"].append(AIMessage(content=response_text))
+        # Chequear si hay tool_calls en la respuesta (native format)
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            # OpenAI devuelve tool_calls como lista
+            tool_call = response.tool_calls[0]
+            state["last_tool_result"] = {
+                "tool_name": tool_call.get("name") or tool_call.name,
+                "input": tool_call.get("args") or tool_call.args,
+                "is_tool_call": True
+            }
         else:
             # Sin tool call, agregar respuesta directamente
-            state["messages"].append(AIMessage(content=response_text))
+            state["messages"].append(AIMessage(content=response.content))
 
         return state
 
@@ -329,12 +360,13 @@ Current context:
 def node_execute_tool(state: AgentStateDict) -> AgentStateDict:
     """
     Nodo 3: Ejecutar la herramienta seleccionada
-    - Si hay tool_result, ejecutar
-    - Sino, pasar al siguiente
+    - Si hay is_tool_call=True, ejecutar
+    - Sino, pasar al siguiente nodo
     """
     tool_result = state.get("last_tool_result")
 
-    if not tool_result:
+    # Solo ejecutar si es un tool call (no es una respuesta sin herramienta)
+    if not tool_result or not tool_result.get("is_tool_call", False):
         return state
 
     try:
@@ -344,8 +376,13 @@ def node_execute_tool(state: AgentStateDict) -> AgentStateDict:
         # Ejecutar herramienta
         result = execute_tool(tool_name, tool_input)
 
-        # Guardar resultado en estado
-        state["last_tool_result"] = result
+        # Guardar resultado en estado (reemplazar el tool call con el resultado)
+        state["last_tool_result"] = {
+            "tool_name": tool_name,
+            "input": tool_input,
+            "result": result,
+            "is_tool_call": False  # Ya ejecutado
+        }
         state["recent_tool_calls"].append({
             "tool": tool_name,
             "input": tool_input,
@@ -355,14 +392,17 @@ def node_execute_tool(state: AgentStateDict) -> AgentStateDict:
         return state
 
     except Exception as e:
-        state["last_tool_result"] = {"error": str(e)}
+        state["last_tool_result"] = {
+            "error": str(e),
+            "is_tool_call": False
+        }
         return state
 
 
 def node_generate_response(state: AgentStateDict) -> AgentStateDict:
     """
     Nodo 4: Generar respuesta final
-    - Si se ejecuto una tool, usar el resultado
+    - Si se ejecutó una tool, usar el resultado
     - Formatear respuesta conversacional
     - Extraer información relevante según el tipo de tool
     """
@@ -372,55 +412,29 @@ def node_generate_response(state: AgentStateDict) -> AgentStateDict:
     if not messages:
         return state
 
-    system_prompt = """You are a helpful conversational agent analyzing digital conversations.
-
-Your role is to:
-1. Answer questions about conversation data
-2. Use tool results to provide insights
-3. Extract the MOST RELEVANT information (not all data)
-4. Be concise and clear
-5. Always respond in Spanish
-
-IMPORTANT:
-- If you have metrics data (top authors, top posts), extract the TOP 3-5 items
-- Avoid dumping entire JSON structures
-- Format as natural conversation, not raw data
-- Always cite the data you're using"""
-
     context = ""
     if tool_result and "error" not in tool_result:
         tool_name = tool_result.get("tool_name")
+        result_data = tool_result.get("result", {})
 
         # Procesar resultado según el tipo de tool
         if tool_name == "get_influence_metrics":
-            # Extraer información relevante de métricas
-            result_data = tool_result.get("result", {})
-
-            # Construir resumen de métricas
             metrics_summary = {
                 "top_autores": result_data.get("top_autores_por_influencia", [])[:3],
                 "top_posts": result_data.get("top_posts_comentados", [])[:3],
                 "estadisticas": result_data.get("estadisticas_generales", {})
             }
-
             context = f"\nMetrics Analysis Result:\n{json.dumps(metrics_summary, indent=2, ensure_ascii=False)}"
 
         elif tool_name == "analyze_sentiment":
-            # Extraer información relevante de sentimientos
-            result_data = tool_result.get("result", {})
-
             sentiment_summary = {
                 "distribucion": result_data.get("distribucion", []),
                 "sentimiento_dominante": result_data.get("sentimiento_dominante"),
                 "muestras": result_data.get("muestras_por_sentimiento", {})
             }
-
             context = f"\nSentiment Analysis Result:\n{json.dumps(sentiment_summary, indent=2, ensure_ascii=False)}"
 
         elif tool_name == "trace_propagation":
-            # Extraer información relevante de propagación
-            result_data = tool_result.get("result", {})
-
             propagation_summary = {
                 "alcance_total": result_data.get("alcance_total"),
                 "hijos_directos": result_data.get("hijos_directos"),
@@ -428,27 +442,51 @@ IMPORTANT:
                 "velocidad_media": result_data.get("velocidad_media_minutos"),
                 "top_autores": result_data.get("top_autores_respuestas", {})
             }
-
             context = f"\nPropagation Analysis Result:\n{json.dumps(propagation_summary, indent=2, ensure_ascii=False)}"
         else:
-            # Fallback para otras tools
             context = f"\nTool result:\n{json.dumps(tool_result, indent=2, ensure_ascii=False)[:500]}"
 
     elif tool_result and "error" in tool_result:
         context = f"\nTool error: {tool_result['error']}\n\nRespond to the user explaining that you couldn't retrieve the data, but try to help with what you know."
 
+    # ===========================================================================
+    # LONG-TERM MEMORY: PASAR CONTEXTO DE SESIONES PREVIAS (Phase 3)
+    # ===========================================================================
+    long_term_context = state.get("long_term_context", "")
+    system_prompt = get_generate_system_prompt(context, long_term_context=long_term_context)
+
     try:
         response = llm.invoke([
-            {"role": "system", "content": system_prompt + context},
+            {"role": "system", "content": system_prompt},
             *[{"role": msg.type, "content": msg.content} for msg in messages[-3:]]
         ])
 
+        # ===========================================================================
+        # FINOPS: CAPTURAR TOKENS (Phase 2)
+        # ===========================================================================
+        usage = response.response_metadata.get("token_usage", {}) if hasattr(response, "response_metadata") else {}
+        if usage:
+            state.setdefault("token_usage", []).append({
+                "call": "generate",
+                "model": config.LLM_MODEL,
+                "input": usage.get("prompt_tokens", 0),
+                "output": usage.get("completion_tokens", 0),
+            })
+
+        response_text = response.content
+
+        # ===========================================================================
+        # SEGURIDAD: ENMASCARAR PII EN LA RESPUESTA
+        # ===========================================================================
+
+        masked_response, _ = mask_sensitive_data(response_text)
+
         # Si ya no hay respuesta previa, agregarla
         if not any(isinstance(m, AIMessage) for m in messages[-1:]):
-            state["messages"].append(AIMessage(content=response.content))
+            state["messages"].append(AIMessage(content=masked_response))
         else:
-            # Reemplazar ultima respuesta
-            state["messages"][-1] = AIMessage(content=response.content)
+            # Reemplazar última respuesta
+            state["messages"][-1] = AIMessage(content=masked_response)
 
     except Exception as e:
         state["messages"].append(AIMessage(content=f"Error: {str(e)}"))
@@ -499,21 +537,60 @@ def build_agent_graph() -> StateGraph:
 # ==============================================================================
 
 class ConversationalAgent:
-    """Wrapper del agente que maneja la memoria y la interaccion"""
+    """Wrapper del agente que maneja la memoria, seguridad e interacción"""
 
-    def __init__(self):
+    def __init__(self, session_id: str = None, user_id: str = None):
         self.graph = build_agent_graph()
         self.memory = ConversationalMemory(max_messages=6)
+        self.session_id = session_id or str(uuid.uuid4())
+        self.user_id = user_id or "anonymous"
+
+        # Componentes de seguridad
+        self.audit_logger = AuditLogger() if config.SECURITY_AUDIT_ENABLED else None
+        self.rate_limiter = RateLimiter(max_requests=20, time_window=60) if config.SECURITY_RATE_LIMITING_ENABLED else None
+
+        # Componentes de FinOps (Phase 2)
+        self.cost_tracker = CostTracker(
+            default_model=config.LLM_MODEL,
+            monthly_queries_estimate=config.FINOPS_MONTHLY_QUERIES_ESTIMATE
+        ) if config.FINOPS_ENABLED else None
+        self.last_query_tokens = {"input": 0, "output": 0, "total": 0}
+
+        # Componentes de Long-Term Memory (Phase 3)
+        try:
+            self.long_term_memory = create_memory_backend(config.LT_MEMORY_BACKEND) if config.LT_MEMORY_ENABLED else None
+        except Exception as e:
+            print(f"[Warning] Long-Term Memory initialization failed: {e}. Running without LTM.")
+            self.long_term_memory = None
+
+        # Componentes de Observability (Phase 4)
+        self.tracer = LocalTracer() if config.OBS_ENABLED else None
+        self.ragas_eval = RagasEvaluator(llm=llm) if config.OBS_RAGAS_ENABLED else None
+        self.last_eval_result = None
+
+        # Cargar usernames del dataset para detección de PII
+        try:
+            from shared.data_loader import get_loader
+            loader = get_loader()
+            load_usernames_from_loader(loader)
+        except Exception as e:
+            print(f"Warning: Could not load usernames for PII detection: {e}")
+
         self.state: AgentStateDict = {
             "messages": [],
             "last_tool_result": None,
             "current_topic": None,
-            "recent_tool_calls": []
+            "recent_tool_calls": [],
+            "react_trace": None,  # Para ReAct pattern (Fase 1.6)
+            "pattern_mode": None,  # Patrón activo: "react" | "reflection" | "planning" | "hitl" | "crew" | None
+            "security_info": {},  # Información de seguridad
+            "token_usage": [],  # Rastreo de tokens (Phase 2)
         }
 
     def chat(self, user_message: str) -> str:
         """
         Procesar un mensaje del usuario y retornar respuesta
+        Incluye seguridad, rate limiting y auditoría
 
         Args:
             user_message: Mensaje del usuario
@@ -521,6 +598,48 @@ class ConversationalAgent:
         Returns:
             Respuesta del agente
         """
+        # ===========================================================================
+        # SEGURIDAD: RATE LIMITING
+        # ===========================================================================
+
+        if self.rate_limiter:
+            allowed, reason = self.rate_limiter.is_allowed(self.user_id)
+            if not allowed:
+                return f"Access denied: {reason}"
+
+        # ===========================================================================
+        # LONG-TERM MEMORY: RECUPERAR CONTEXTO DE SESIONES PREVIAS (Phase 3)
+        # ===========================================================================
+
+        if self.long_term_memory:
+            try:
+                relevant = self.long_term_memory.search_relevant(
+                    query=user_message,
+                    top_k=config.LT_MEMORY_TOP_K,
+                    exclude_session=self.session_id
+                )
+
+                if relevant:
+                    # Formatear memories para inyectar en el grafo
+                    context_parts = []
+                    for entry in relevant[:config.LT_MEMORY_TOP_K]:
+                        # Simplificar para no sobrecargar el contexto
+                        context_parts.append(f"Q: {entry.user_msg[:100]}...\nA: {entry.agent_msg[:100]}...")
+
+                    self.state["long_term_context"] = "\n---\n".join(context_parts)
+                else:
+                    self.state["long_term_context"] = None
+            except Exception as e:
+                print(f"[Warning] Long-term memory search failed: {e}")
+                self.state["long_term_context"] = None
+
+        # ===========================================================================
+        # OBSERVABILITY: INICIAR TRAZA (Phase 4)
+        # ===========================================================================
+
+        query_id = self.tracer.start_query(user_message) if self.tracer else None
+        self.state["query_id"] = query_id
+
         # Agregar mensaje a estado
         self.memory.add_user_message(user_message)
         self.state["messages"] = self.memory.get_messages()
@@ -531,24 +650,288 @@ class ConversationalAgent:
         # Actualizar estado
         self.state = output
 
-        # Obtener ultima respuesta del asistente
+        # ===========================================================================
+        # FINOPS: PROCESAR TOKENS (Phase 2)
+        # ===========================================================================
+
+        if self.cost_tracker:
+            # Obtener tokens nuevos capturados en esta query
+            prev_token_count = len(self.state.get("token_usage", []) or [])
+            new_calls = output.get("token_usage", [])[prev_token_count:]
+
+            # Registrar en cost tracker
+            for call in new_calls:
+                self.cost_tracker.record(
+                    call_name=call["call"],
+                    model=call["model"],
+                    input_tokens=call["input"],
+                    output_tokens=call["output"]
+                )
+
+            # Actualizar último query tokens
+            query_in = sum(c["input"] for c in new_calls)
+            query_out = sum(c["output"] for c in new_calls)
+            self.last_query_tokens = {
+                "input": query_in,
+                "output": query_out,
+                "total": query_in + query_out
+            }
+
+        # ===========================================================================
+        # SEGURIDAD: AUDITORÍA
+        # ===========================================================================
+
+        if self.audit_logger:
+            security_info = output.get("security_info", {})
+            has_injection = security_info.get("has_injection", False)
+            injection_severity = security_info.get("injection_severity", "SAFE")
+            pii_detected = security_info.get("pii_detected", False)
+            pii_types = json.dumps(security_info.get("pii_types", {}))
+
+            # Registrar rate limiting
+            if self.rate_limiter:
+                self.rate_limiter.record(self.user_id, is_injection=has_injection)
+
+        # Obtener última respuesta del asistente
+        tool_called = None
         for msg in reversed(output["messages"]):
             if isinstance(msg, AIMessage):
-                self.memory.add_assistant_message(msg.content)
-                return msg.content
+                response_text = msg.content
+
+                # Registrar en auditoría
+                if self.audit_logger:
+                    self.audit_logger.log(
+                        session_id=self.session_id,
+                        user_id=self.user_id,
+                        query=user_message,
+                        response=response_text,
+                        tool_called=tool_called,
+                        has_injection=has_injection,
+                        injection_severity=injection_severity,
+                        pii_detected=pii_detected,
+                        pii_types=pii_types if pii_detected else None,
+                    )
+
+                # ===========================================================================
+                # LONG-TERM MEMORY: GUARDAR TURNO EN BASE DE DATOS (Phase 3)
+                # ===========================================================================
+
+                if self.long_term_memory:
+                    try:
+                        self.long_term_memory.save_turn(
+                            session_id=self.session_id,
+                            user_msg=user_message,
+                            agent_msg=response_text,
+                            metadata={"topic": self.state.get("current_topic", "general")}
+                        )
+                    except Exception as e:
+                        print(f"[Warning] Long-term memory save failed: {e}")
+
+                # ===========================================================================
+                # OBSERVABILITY: FINALIZAR TRAZA Y EVALUAR (Phase 4)
+                # ===========================================================================
+
+                if self.tracer and query_id:
+                    # Obtener tokens de la última query
+                    last_tokens = self.last_query_tokens if self.cost_tracker else {"input": 0, "output": 0}
+                    # Obtener tool llamada
+                    tool_called = output.get("last_tool_result", {}).get("tool_name") if output.get("last_tool_result") else None
+                    # Finalizar traza y obtener latencia
+                    latency = self.tracer.end_query(
+                        query_id=query_id,
+                        tool_called=tool_called,
+                        input_tokens=last_tokens.get("input", 0),
+                        output_tokens=last_tokens.get("output", 0),
+                        success=True
+                    )
+                    print(f"[Trace] Latency: {latency:.0f}ms | Tool: {tool_called or 'none'}")
+
+                # Ragas evaluation
+                if self.ragas_eval:
+                    try:
+                        tool_context = json.dumps(output.get("last_tool_result", {}) or {})[:300]
+                        eval_result = self.ragas_eval.evaluate(user_message, response_text, tool_context)
+                        self.last_eval_result = eval_result
+                        if eval_result.ragas_available:
+                            print(f"[Ragas] Relevancy: {eval_result.answer_relevancy:.2f} | Faithfulness: {eval_result.faithfulness:.2f}")
+                        else:
+                            print(f"[Ragas] (Fallback LLM) Relevancy: {eval_result.answer_relevancy:.2f}")
+                    except Exception as e:
+                        print(f"[Warning] Ragas evaluation failed: {e}")
+
+                self.memory.add_assistant_message(response_text)
+                return response_text
 
         return "No response generated"
 
     def reset(self):
-        """Resetear la conversacion"""
+        """Resetear la conversación"""
         self.memory.clear()
+        if self.cost_tracker:
+            self.cost_tracker.reset()
+        if self.tracer:
+            self.tracer.reset()
+        if self.ragas_eval:
+            self.ragas_eval.reset()
         self.state = {
             "messages": [],
             "last_tool_result": None,
             "current_topic": None,
-            "recent_tool_calls": []
+            "recent_tool_calls": [],
+            "react_trace": None,
+            "pattern_mode": None,
+            "token_usage": [],
+            "long_term_context": None,
+            "query_id": None,
         }
 
+    def set_pattern_mode(self, mode: str) -> None:
+        """
+        Establecer el patrón de ejecución del agente
+
+        Args:
+            mode: "react" | "reflection" | "planning" | "hitl" | "crew" | None
+        """
+        if mode and mode not in ["react", "reflection", "planning", "hitl", "crew"]:
+            print(f"⚠️ Unknown pattern mode: {mode}. Use: react, reflection, planning, hitl, crew, or None")
+            return
+        self.state["pattern_mode"] = mode
+        mode_name = mode if mode else "default"
+        print(f"✅ Pattern mode set to: {mode_name}")
+
     def get_conversation_history(self) -> str:
-        """Obtener historial de conversacion"""
+        """Obtener historial de conversación"""
         return self.memory.get_context_for_prompt()
+
+    def get_security_report(self) -> Dict[str, Any]:
+        """Obtener reporte de seguridad de la sesión actual"""
+        if not self.audit_logger:
+            return {"error": "Audit logging not enabled"}
+
+        session_summary = self.audit_logger.get_session_summary(self.session_id)
+        return {
+            "session_id": self.session_id,
+            "user_id": self.user_id,
+            "session_summary": session_summary,
+        }
+
+    def export_audit_logs(self, output_file: str = None) -> str:
+        """Exportar logs de auditoría de la sesión"""
+        if not self.audit_logger:
+            return json.dumps({"error": "Audit logging not enabled"})
+
+        return self.audit_logger.export_logs(session_id=self.session_id, output_file=output_file)
+
+    def get_cost_report(self) -> str:
+        """
+        Obtener reporte de costos de la sesión (Phase 2 FinOps)
+
+        Returns:
+            String con reporte formateado
+        """
+        if not self.cost_tracker:
+            return "FinOps tracking not enabled"
+        return self.cost_tracker.get_session_report()
+
+    def get_memory_stats(self) -> str:
+        """
+        Obtener estadísticas de memoria long-term (Phase 3)
+
+        Returns:
+            String con estadísticas formateadas
+        """
+        if not self.long_term_memory:
+            return "Long-Term Memory not enabled"
+
+        try:
+            stats = self.long_term_memory.get_stats()
+            backend_type = stats.get("backend_type", "unknown")
+
+            if backend_type == "sqlite":
+                return f"""
+Long-Term Memory Statistics (SQLite)
+=====================================
+Total turns saved:   {stats.get('total_turns', 0)}
+Total sessions:      {stats.get('total_sessions', 0)}
+Database size:       {stats.get('db_size_mb', 0)} MB
+Oldest entry:        {stats.get('oldest_entry', 'N/A')}
+Newest entry:        {stats.get('newest_entry', 'N/A')}
+DB path:             {stats.get('db_path', 'N/A')}
+"""
+            elif backend_type == "chroma":
+                return f"""
+Long-Term Memory Statistics (ChromaDB)
+========================================
+Total turns saved:   {stats.get('total_turns', 0)}
+Total sessions:      {stats.get('total_sessions', 0)}
+Directory size:      {stats.get('persist_dir_mb', 0)} MB
+Oldest entry:        {stats.get('oldest_entry', 'N/A')}
+Newest entry:        {stats.get('newest_entry', 'N/A')}
+Persist directory:   {stats.get('persist_dir', 'N/A')}
+"""
+            elif backend_type == "hybrid":
+                sqlite_stats = stats.get("sqlite", {})
+                chroma_stats = stats.get("chroma", {})
+                return f"""
+Long-Term Memory Statistics (Hybrid: SQLite + ChromaDB)
+=========================================================
+SQLite:
+  Total turns:       {sqlite_stats.get('total_turns', 0)}
+  Total sessions:    {sqlite_stats.get('total_sessions', 0)}
+  Size:              {sqlite_stats.get('db_size_mb', 0)} MB
+
+ChromaDB:
+  Total turns:       {chroma_stats.get('total_turns', 0) if isinstance(chroma_stats, dict) else 'N/A'}
+  Status:            {'Ready' if isinstance(chroma_stats, dict) else 'Not available'}
+"""
+            else:
+                return str(stats)
+
+        except Exception as e:
+            return f"Error getting memory stats: {e}"
+
+    def clear_long_term_memory(self, session_only: bool = True) -> str:
+        """
+        Limpiar memoria long-term
+
+        Args:
+            session_only: Si True, solo limpia la sesión actual. Si False, limpia todo (DESTRUCTIVO)
+
+        Returns:
+            Mensaje de confirmación
+        """
+        if not self.long_term_memory:
+            return "Long-Term Memory not enabled"
+
+        try:
+            if session_only:
+                self.long_term_memory.clear_session(self.session_id)
+                return f"Cleared memory for session {self.session_id}"
+            else:
+                self.long_term_memory.clear_all()
+                return "Cleared ALL long-term memory (DESTRUCTIVE OPERATION)"
+
+        except Exception as e:
+            return f"Error clearing memory: {e}"
+
+    def get_metrics_report(self) -> str:
+        """
+        Obtener reporte de métricas de observabilidad (Phase 4)
+
+        Returns:
+            String con reporte formateado
+        """
+        if not self.tracer:
+            return "Observability tracing not enabled"
+        return self.tracer.get_metrics_report()
+
+    def get_eval_report(self) -> str:
+        """
+        Obtener reporte de evaluación de calidad (Phase 4)
+
+        Returns:
+            String con reporte formateado
+        """
+        if not self.ragas_eval:
+            return "Ragas evaluation not enabled"
+        return self.ragas_eval.get_eval_report()

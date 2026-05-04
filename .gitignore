@@ -52,5 +52,9 @@ logs/
 node_modules/
 package-lock.json
 
+# Runtime data
+data/
+chroma_data/
+
 .claude
 .env

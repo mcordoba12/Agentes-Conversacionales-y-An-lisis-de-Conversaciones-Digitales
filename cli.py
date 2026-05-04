@@ -201,6 +201,31 @@ def main():
                 print("="*80 + "\n")
                 continue
 
+            elif user_input.lower().startswith("mode"):
+                parts = user_input.split()
+                if len(parts) < 2:
+                    print("\nUSO: mode <patrón>")
+                    print("Patrones disponibles: react, reflection, planning, hitl, default")
+                    print("\nEjemplos:")
+                    print("  mode react      → Razonamiento explícito (Thought/Action/Observation)")
+                    print("  mode reflection → Auto-evaluación de respuestas")
+                    print("  mode planning   → Descomposición de queries complejas")
+                    print("  mode hitl       → Confirmación manual antes de ejecutar tools")
+                    print("  mode default    → Volver al modo normal")
+                    continue
+
+                pattern = parts[1].lower()
+                if pattern == "default":
+                    agent.set_pattern_mode(None)
+                    print("[Pattern] Modo normal activado")
+                elif pattern in ["react", "reflection", "planning", "hitl"]:
+                    agent.set_pattern_mode(pattern)
+                    print(f"[Pattern] Patrón '{pattern}' activado")
+                else:
+                    print(f"[ERROR] Patrón desconocido: {pattern}")
+                    print("Válidos: react, reflection, planning, hitl, default")
+                continue
+
             elif user_input.lower() == "history":
                 history = agent.get_conversation_history()
                 if history:

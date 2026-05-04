@@ -73,3 +73,25 @@ class AgentStateDict(TypedDict, total=False):
     last_tool_result: Optional[Dict[str, Any]]
     current_topic: Optional[str]
     recent_tool_calls: List[Dict[str, Any]]
+
+    # Nuevos campos para Phase 1+ (prompts, patterns)
+    react_trace: Optional[Dict[str, str]]        # {"thought": str, "action": str, "observation": str, "reflection": str}
+    pattern_mode: Optional[str]                  # "react" | "reflection" | "planning" | "hitl" | "crew" | None
+
+    # Campos para Phase 6 (patterns) - ahora usados en Fase 6
+    hitl_pending: Optional[bool]
+    hitl_approved: Optional[bool]
+    reflection_insufficient: Optional[bool]
+    reflection_retries: Optional[int]
+    plan_steps: Optional[List[Dict[str, Any]]]
+    plan_current_step: Optional[int]
+
+    # Campos para Phase 2 (FinOps)
+    token_usage: Optional[List[Dict[str, Any]]]  # Lista de registros de tokens por llamada LLM
+    security_info: Optional[Dict[str, Any]]      # Información de seguridad (inyecciones, PII, etc)
+
+    # Campos para Phase 3 (Long-Term Memory)
+    long_term_context: Optional[str]             # Contexto recuperado de sesiones previas
+
+    # Campos para Phase 4 (Observability)
+    query_id: Optional[str]                      # ID de query para correlacionar con trazas

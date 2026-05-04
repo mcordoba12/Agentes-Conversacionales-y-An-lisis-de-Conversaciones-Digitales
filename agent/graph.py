@@ -15,7 +15,8 @@ from .state import AgentStateDict
 from .llm_factory import create_llm
 from .memory import ConversationalMemory
 from .tools import TOOLS, execute_tool, TOOLS_SCHEMA
-from .prompts import get_route_system_prompt, get_react_system_prompt, get_generate_system_prompt
+from .prompts import (get_route_system_prompt, get_react_system_prompt, get_generate_system_prompt,
+                      get_reflection_system_prompt, get_planning_system_prompt, get_hitl_approval_prompt)
 from .cost_tracker import CostTracker
 from .memory_backends import create_memory_backend
 from observability import LocalTracer, RagasEvaluator
@@ -496,6 +497,235 @@ def node_generate_response(state: AgentStateDict) -> AgentStateDict:
 
 
 # ==============================================================================
+# NODOS DE PATRONES (Phase 6 - Design Patterns)
+# ==============================================================================
+
+def node_react_think(state: AgentStateDict) -> AgentStateDict:
+    """
+    Nodo ReAct: genera Thought/Action/Observation/Reflection
+    Usado cuando pattern_mode == "react"
+    """
+    messages: List[BaseMessage] = state.get("messages", [])
+    if not messages:
+        return state
+
+    system_prompt = get_react_system_prompt()
+
+    try:
+        response = llm.invoke([
+            {"role": "system", "content": system_prompt},
+            *[{"role": msg.type, "content": msg.content} for msg in messages[-3:]]
+        ])
+
+        response_text = response.content
+
+        # Parsear Thought/Action/Observation/Reflection
+        react_trace = {
+            "thought": _extract_between(response_text, "Thought:", "Action:"),
+            "action": _extract_between(response_text, "Action:", "Observation:"),
+            "observation": _extract_between(response_text, "Observation:", "Reflection:"),
+            "reflection": _extract_between(response_text, "Reflection:", None)
+        }
+
+        state["react_trace"] = react_trace
+
+        # Si hay TOOL_CALL en la acción, marcar para ejecutar
+        if "TOOL_CALL" in response_text:
+            import json
+            tool_call_str = _extract_between(response_text, "TOOL_CALL:", None)
+            try:
+                tool_call = json.loads(tool_call_str)
+                state["last_tool_result"] = {
+                    "tool_name": tool_call.get("tool_name"),
+                    "input": tool_call.get("input", {}),
+                    "is_tool_call": True
+                }
+            except:
+                pass
+
+    except Exception as e:
+        state["messages"].append(AIMessage(content=f"Error en ReAct: {e}"))
+
+    return state
+
+
+def node_reflect(state: AgentStateDict) -> AgentStateDict:
+    """
+    Nodo Reflection: evalúa si la respuesta es suficiente
+    Usado cuando pattern_mode == "reflection"
+    """
+    messages: List[BaseMessage] = state.get("messages", [])
+    tool_result = state.get("last_tool_result")
+
+    if not messages or not tool_result:
+        return state
+
+    # Obtener la última respuesta del agente y el resultado del tool
+    context = f"Tool result: {json.dumps(tool_result.get('result', {}), ensure_ascii=False)[:500]}"
+    system_prompt = get_reflection_system_prompt()
+
+    try:
+        response = llm.invoke([
+            {"role": "system", "content": system_prompt},
+            *[{"role": msg.type, "content": msg.content} for msg in messages[-3:]],
+            {"role": "user", "content": f"User question context: {context}"}
+        ])
+
+        response_text = response.content.upper()
+
+        if "SUFFICIENT" in response_text:
+            state["reflection_insufficient"] = False
+        elif "INSUFFICIENT" in response_text or "AMBIGUOUS" in response_text:
+            state["reflection_insufficient"] = True
+            state["reflection_retries"] = state.get("reflection_retries", 0) + 1
+
+    except Exception as e:
+        state["reflection_insufficient"] = False  # Por defecto, continuar
+
+    return state
+
+
+def node_plan(state: AgentStateDict) -> AgentStateDict:
+    """
+    Nodo Planning: descompone query compleja en pasos
+    Usado cuando pattern_mode == "planning"
+    """
+    messages: List[BaseMessage] = state.get("messages", [])
+    if not messages:
+        return state
+
+    system_prompt = get_planning_system_prompt()
+
+    try:
+        response = llm.invoke([
+            {"role": "system", "content": system_prompt},
+            *[{"role": msg.type, "content": msg.content} for msg in messages[-2:]]
+        ])
+
+        response_text = response.content
+
+        # Parsear JSON con steps
+        import json
+        json_str = _extract_between(response_text, "[", "]") or response_text
+        try:
+            steps = json.loads("[" + json_str + "]" if "[" not in json_str else json_str)
+            state["plan_steps"] = steps
+            state["plan_current_step"] = 0
+
+            # Mostrar el plan al usuario
+            plan_msg = f"[Planning] Plan generado con {len(steps)} pasos:\n"
+            for step in steps:
+                plan_msg += f"  {step.get('step')}: {step.get('task')} (tool: {step.get('tool')})\n"
+
+            state["messages"].append(AIMessage(content=plan_msg))
+        except:
+            state["plan_steps"] = []
+
+    except Exception as e:
+        state["messages"].append(AIMessage(content=f"Error en Planning: {e}"))
+
+    return state
+
+
+def node_hitl_check(state: AgentStateDict) -> AgentStateDict:
+    """
+    Nodo HITL: pausa para confirmación del usuario antes de ejecutar tool
+    Usado cuando pattern_mode == "hitl"
+    """
+    tool_result = state.get("last_tool_result")
+
+    if not tool_result or not tool_result.get("is_tool_call"):
+        return state
+
+    tool_name = tool_result.get("tool_name")
+    tool_input = tool_result.get("input", {})
+
+    # Generar mensaje de confirmación
+    approval_msg = f"[HITL_PENDING] ¿Ejecutar {tool_name} con parámetros {tool_input}? (responde 'si' o 'no')"
+
+    state["messages"].append(AIMessage(content=approval_msg))
+    state["hitl_pending"] = True
+
+    return state
+
+
+# ==============================================================================
+# FUNCIONES DE ROUTING (Conditional Edges)
+# ==============================================================================
+
+def route_after_input(state: AgentStateDict) -> str:
+    """Decidir si ir a Planning o Route-to-Tool"""
+    mode = state.get("pattern_mode")
+    messages = state.get("messages", [])
+
+    if mode == "planning" and len(messages) > 0:
+        # Detectar si la query es compleja (multiple preguntas, "y")
+        last_msg = messages[-1].content if isinstance(messages[-1], HumanMessage) else ""
+        if " y " in last_msg.lower() or "?" in last_msg.count("?") > 1:
+            return "node_plan"
+
+    return "route_to_tool"
+
+
+def route_after_tool_selection(state: AgentStateDict) -> str:
+    """Decidir si ir a ReAct, HITL, Execute, o Generate"""
+    mode = state.get("pattern_mode")
+    tool_result = state.get("last_tool_result")
+    has_tool = bool(tool_result and tool_result.get("is_tool_call"))
+
+    if not has_tool:
+        return "generate_response"
+
+    if mode == "react":
+        return "node_react_think"
+    elif mode == "hitl":
+        return "node_hitl_check"
+    else:
+        return "execute_tool"
+
+
+def route_after_execute(state: AgentStateDict) -> str:
+    """Decidir si ir a Reflection o Generate"""
+    mode = state.get("pattern_mode")
+
+    if mode == "reflection":
+        return "node_reflect"
+    else:
+        return "generate_response"
+
+
+def route_after_reflect(state: AgentStateDict) -> str:
+    """Decidir si retornar a Route (retry) o Generate"""
+    insufficient = state.get("reflection_insufficient", False)
+    retries = state.get("reflection_retries", 0)
+
+    if insufficient and retries < 1:
+        return "route_to_tool"
+    else:
+        return "generate_response"
+
+
+# ==============================================================================
+# UTILIDADES
+# ==============================================================================
+
+def _extract_between(text: str, start: str, end: str) -> str:
+    """Extraer substring entre dos delimitadores"""
+    try:
+        if start not in text:
+            return ""
+        start_idx = text.find(start) + len(start)
+        if end is None:
+            return text[start_idx:].strip()
+        end_idx = text.find(end, start_idx)
+        if end_idx == -1:
+            return text[start_idx:].strip()
+        return text[start_idx:end_idx].strip()
+    except:
+        return ""
+
+
+# ==============================================================================
 # CONSTRUIR GRAFO
 # ==============================================================================
 
@@ -512,16 +742,62 @@ def build_agent_graph() -> StateGraph:
     """
     graph = StateGraph(AgentStateDict)
 
-    # Agregar nodos
+    # Agregar nodos (existentes)
     graph.add_node("process_input", node_process_input)
     graph.add_node("route_to_tool", node_route_to_tool)
     graph.add_node("execute_tool", node_execute_tool)
     graph.add_node("generate_response", node_generate_response)
 
-    # Definir edges
-    graph.add_edge("process_input", "route_to_tool")
-    graph.add_edge("route_to_tool", "execute_tool")
-    graph.add_edge("execute_tool", "generate_response")
+    # Agregar nodos (nuevos - Phase 6)
+    graph.add_node("node_react_think", node_react_think)
+    graph.add_node("node_reflect", node_reflect)
+    graph.add_node("node_plan", node_plan)
+    graph.add_node("node_hitl_check", node_hitl_check)
+
+    # Definir conditional edges
+    # process_input → (planning | route_to_tool)
+    graph.add_conditional_edges(
+        "process_input",
+        route_after_input,
+        {"node_plan": "node_plan", "route_to_tool": "route_to_tool"}
+    )
+
+    # node_plan → route_to_tool
+    graph.add_edge("node_plan", "route_to_tool")
+
+    # route_to_tool → (node_react_think | node_hitl_check | execute_tool | generate_response)
+    graph.add_conditional_edges(
+        "route_to_tool",
+        route_after_tool_selection,
+        {
+            "node_react_think": "node_react_think",
+            "node_hitl_check": "node_hitl_check",
+            "execute_tool": "execute_tool",
+            "generate_response": "generate_response"
+        }
+    )
+
+    # node_react_think → execute_tool
+    graph.add_edge("node_react_think", "execute_tool")
+
+    # node_hitl_check → END (pausa para confirmación)
+    graph.add_edge("node_hitl_check", END)
+
+    # execute_tool → (node_reflect | generate_response)
+    graph.add_conditional_edges(
+        "execute_tool",
+        route_after_execute,
+        {"node_reflect": "node_reflect", "generate_response": "generate_response"}
+    )
+
+    # node_reflect → (route_to_tool | generate_response)
+    graph.add_conditional_edges(
+        "node_reflect",
+        route_after_reflect,
+        {"route_to_tool": "route_to_tool", "generate_response": "generate_response"}
+    )
+
+    # generate_response → END
     graph.add_edge("generate_response", END)
 
     # Establecer entry point
@@ -586,6 +862,13 @@ class ConversationalAgent:
             "pattern_mode": None,  # Patrón activo: "react" | "reflection" | "planning" | "hitl" | "crew" | None
             "security_info": {},  # Información de seguridad
             "token_usage": [],  # Rastreo de tokens (Phase 2)
+            # Phase 6: Design Patterns
+            "hitl_pending": False,
+            "hitl_approved": False,
+            "reflection_insufficient": False,
+            "reflection_retries": 0,
+            "plan_steps": [],
+            "plan_current_step": 0,
         }
 
     def chat(self, user_message: str) -> str:
@@ -814,6 +1097,13 @@ class ConversationalAgent:
             "token_usage": [],
             "long_term_context": None,
             "query_id": None,
+            # Phase 6: Design Patterns
+            "hitl_pending": False,
+            "hitl_approved": False,
+            "reflection_insufficient": False,
+            "reflection_retries": 0,
+            "plan_steps": [],
+            "plan_current_step": 0,
         }
 
     def set_pattern_mode(self, mode: str) -> None:
@@ -824,11 +1114,11 @@ class ConversationalAgent:
             mode: "react" | "reflection" | "planning" | "hitl" | "crew" | None
         """
         if mode and mode not in ["react", "reflection", "planning", "hitl", "crew"]:
-            print(f"⚠️ Unknown pattern mode: {mode}. Use: react, reflection, planning, hitl, crew, or None")
+            print(f"[WARNING] Unknown pattern mode: {mode}. Use: react, reflection, planning, hitl, crew, or None")
             return
         self.state["pattern_mode"] = mode
         mode_name = mode if mode else "default"
-        print(f"✅ Pattern mode set to: {mode_name}")
+        print(f"[Pattern] Pattern mode set to: {mode_name}")
 
     def get_conversation_history(self) -> str:
         """Obtener historial de conversación"""

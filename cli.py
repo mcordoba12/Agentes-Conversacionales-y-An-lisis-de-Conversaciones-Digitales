@@ -47,6 +47,7 @@ Comandos:
   memclear  - Limpiar memoria de esta sesión
   metrics   - Ver métricas de rendimiento (Observability)
   eval      - Ver evaluación de calidad (Ragas)
+  dashboard - Abrir: streamlit run dashboard/app.py (Diferenciador)
 
 ================================================================================
 """

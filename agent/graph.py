@@ -6,6 +6,7 @@ Define el flujo del agente y la orquestacion de tools
 import json
 import re
 from typing import Dict, Any, List, Union, Callable
+from datetime import datetime
 
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
@@ -694,6 +695,7 @@ class ConversationalAgent:
 
         # Obtener última respuesta del asistente
         tool_called = None
+        _latency = 0.0  # Para dashboard (scoping)
         for msg in reversed(output["messages"]):
             if isinstance(msg, AIMessage):
                 response_text = msg.content
@@ -737,14 +739,14 @@ class ConversationalAgent:
                     # Obtener tool llamada
                     tool_called = output.get("last_tool_result", {}).get("tool_name") if output.get("last_tool_result") else None
                     # Finalizar traza y obtener latencia
-                    latency = self.tracer.end_query(
+                    _latency = self.tracer.end_query(
                         query_id=query_id,
                         tool_called=tool_called,
                         input_tokens=last_tokens.get("input", 0),
                         output_tokens=last_tokens.get("output", 0),
                         success=True
                     )
-                    print(f"[Trace] Latency: {latency:.0f}ms | Tool: {tool_called or 'none'}")
+                    print(f"[Trace] Latency: {_latency:.0f}ms | Tool: {tool_called or 'none'}")
 
                 # Ragas evaluation
                 if self.ragas_eval:
@@ -760,6 +762,35 @@ class ConversationalAgent:
                         print(f"[Warning] Ragas evaluation failed: {e}")
 
                 self.memory.add_assistant_message(response_text)
+
+                # ===========================================================================
+                # DASHBOARD: PERSISTIR MÉTRICAS PARA STREAMLIT (Diferenciador)
+                # ===========================================================================
+
+                try:
+                    from dashboard.metrics_store import append_metric
+                    append_metric({
+                        "query_id": query_id or "unknown",
+                        "timestamp": datetime.now().isoformat(),
+                        "session_id": self.session_id,
+                        "latency_ms": _latency,
+                        "tool_called": tool_called,
+                        "input_tokens": self.last_query_tokens.get("input", 0),
+                        "output_tokens": self.last_query_tokens.get("output", 0),
+                        "total_tokens": self.last_query_tokens.get("total", 0),
+                        "total_cost": self.cost_tracker.get_query_cost(
+                            self.last_query_tokens.get("input", 0),
+                            self.last_query_tokens.get("output", 0)
+                        ) if self.cost_tracker else 0.0,
+                        "session_cost_cumulative": self.cost_tracker.session_cost if self.cost_tracker else 0.0,
+                        "answer_relevancy": self.last_eval_result.answer_relevancy if self.last_eval_result else None,
+                        "faithfulness": self.last_eval_result.faithfulness if self.last_eval_result else None,
+                        "success": True,
+                    })
+                except Exception:
+                    # Nunca crashear el agente por culpa de métricas del dashboard
+                    pass
+
                 return response_text
 
         return "No response generated"

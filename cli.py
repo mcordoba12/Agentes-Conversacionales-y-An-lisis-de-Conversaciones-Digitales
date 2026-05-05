@@ -41,6 +41,7 @@ Comandos:
   reset     - Nueva conversacion
   help      - Mostrar este mensaje
   history   - Ver historial
+  mode      - Cambiar patrón: react, reflection, planning, hitl, default (Phase 6)
   provider  - Ver/cambiar proveedor de LLM (Phase 5)
   costs     - Mostrar análisis de costos y tokens (FinOps)
   memory    - Ver estadísticas de memoria long-term
@@ -58,6 +59,12 @@ Comandos disponibles:
   reset           - Iniciar nueva conversacion
   help            - Mostrar este mensaje
   history         - Ver historial de conversacion
+  mode <patrón>   - Cambiar patrón de ejecución (Phase 6)
+                    react       → Razonamiento explícito (Thought/Action/Reflection)
+                    reflection  → Auto-evaluación de respuestas
+                    planning    → Descomposición de queries complejas
+                    hitl        → Confirmación manual antes de ejecutar tools
+                    default     → Volver a modo normal
   provider        - Ver proveedor LLM actual y cómo cambiar (Phase 5)
   costs           - Mostrar análisis de costos y tokens (FinOps)
   memory          - Ver estadísticas de memoria long-term
@@ -269,6 +276,61 @@ def main():
             try:
                 response = agent.chat(user_input)
                 print(format_response(response))
+
+                # ===========================================================
+                # Phase 6: HITL HANDLING (Human-in-the-Loop)
+                # ===========================================================
+
+                # Si el agente está en modo HITL y está esperando aprobación
+                if agent.state.get("hitl_pending"):
+                    # Extractar tool info del último tool_result
+                    tool_result = agent.state.get("last_tool_result", {})
+                    tool_name = tool_result.get("tool_name", "unknown")
+                    tool_input = tool_result.get("input", {})
+
+                    # Pedir confirmación al usuario
+                    print(f"\n[HITL CONFIRMATION REQUIRED]")
+                    print(f"Tool: {tool_name}")
+                    print(f"Input: {tool_input}")
+
+                    while True:
+                        approval = input("\nExecute tool? (si/no): ").strip().lower()
+                        if approval in ["si", "yes", "s", "y"]:
+                            print("[HITL] Aprobado. Ejecutando tool...")
+
+                            # Re-ejecutar execute_tool + generate_response manualmente
+                            from agent.tools import execute_tool
+                            tool_result_data = execute_tool(tool_name, tool_input)
+
+                            # Actualizar estado
+                            agent.state["last_tool_result"] = {
+                                "tool_name": tool_name,
+                                "result": tool_result_data,
+                                "is_tool_call": True,
+                                "input": tool_input
+                            }
+
+                            # Ejecutar generate_response del grafo
+                            from agent.graph import node_generate_response
+                            agent.state = node_generate_response(agent.state)
+
+                            # Extraer y mostrar la respuesta final
+                            for msg in reversed(agent.state["messages"]):
+                                if hasattr(msg, 'content') and not msg.content.startswith("["):
+                                    final_response = msg.content
+                                    print(format_response(final_response))
+                                    break
+
+                            # Limpiar bandera HITL
+                            agent.state["hitl_pending"] = False
+                            break
+
+                        elif approval in ["no", "n"]:
+                            print("[HITL] Action cancelled.")
+                            agent.state["hitl_pending"] = False
+                            break
+                        else:
+                            print("Please answer 'si' (yes) or 'no'")
 
                 # FinOps: Mostrar línea de costo (Phase 2)
                 if config.FINOPS_ENABLED and agent.cost_tracker:

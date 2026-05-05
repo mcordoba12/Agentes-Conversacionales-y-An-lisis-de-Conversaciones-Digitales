@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agente Conversacional - IA RETO ICESI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/theme/black.min.css">
+    <style>
+        .reveal h1, .reveal h2, .reveal h3 { text-transform: none; }
+        .reveal pre { width: 100%; font-size: 0.55em; }
+        .reveal code { padding: 2px 6px; }
+        .tech-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 0.8em; }
+        .highlight { color: #42b983; font-weight: bold; }
+        .diagram { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; font-family: monospace; font-size: 0.75em; }
+        .success { color: #42b983; }
+        .warning { color: #f97316; }
+        .two-col { display: flex; gap: 40px; }
+        .two-col > div { flex: 1; }
+        table { font-size: 0.7em; margin: auto; }
+        td, th { padding: 8px; border: 1px solid #555; }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+            <!-- PORTADA -->
+            <section>
+                <h1>Agente Conversacional</h1>
+                <h3>Análisis Inteligente de Conversaciones Digitales</h3>
+                <p style="margin-top: 40px; font-size: 0.9em;">
+                    <strong>Reto ICESI — Octavo Semestre</strong>
+                </p>
+                <p style="margin-top: 40px; color: #888;">
+                    LangGraph • FastAPI • ReAct, Reflection, Planning, HITL
+                </p>
+            </section>
+
+            <!-- ÍNDICE -->
+            <section>
+                <h2>Contenido</h2>
+                <ol style="font-size: 0.95em; line-height: 1.8;">
+                    <li>El Problema</li>
+                    <li>Arquitectura de Solución</li>
+                    <li>Componentes Principales</li>
+                    <li>Tool Calling Nativo</li>
+                    <li>Patrones Avanzados (ReAct, Reflection, Planning, HITL)</li>
+                    <li>Seguridad (Inyecciones, PII)</li>
+                    <li>FinOps & Observabilidad</li>
+                    <li>Demo en Vivo</li>
+                </ol>
+            </section>
+
+            <!-- PROBLEMA -->
+            <section>
+                <h2>🎯 El Problema</h2>
+                <p>¿Cómo analizar conversaciones digitales de forma <span class="highlight">inteligente y segura</span>?</p>
+
+                <div style="margin-top: 40px; text-align: left; font-size: 0.9em;">
+                    <p>Dataset: <strong>8,500 posts</strong> de redes sociales</p>
+                    <p>Preguntas que el usuario hace:</p>
+                    <ul style="margin-top: 20px;">
+                        <li>¿Quiénes son los usuarios <span class="highlight">más influyentes</span>?</li>
+                        <li>¿Cuál es el <span class="highlight">sentimiento</span> general?</li>
+                        <li>¿Cómo se <span class="highlight">propagó</span> un mensaje?</li>
+                        <li>¿Puedo <span class="highlight">confiar</span> en estas respuestas?</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ARQUITECTURA -->
+            <section>
+                <h2>🏗️ Arquitectura de Solución</h2>
+                <div class="diagram">
+Usuario pregunta
+    ↓
+[Agente LangGraph]
+    ├─ Procesa entrada
+    ├─ Elige herramienta
+    └─ Ejecuta + Genera respuesta
+    ↓
+[3 Microservicios FastAPI]
+    ├─ Sentiment Analysis
+    ├─ Influence Metrics
+    └─ Propagation Tracing
+    ↓
+[Base de Datos + Memoria]
+    ├─ Conversación actual
+    ├─ Contexto anterior
+    └─ Auditoría segura
+    ↓
+Respuesta al usuario
+                </div>
+            </section>
+
+            <!-- COMPONENTES -->
+            <section>
+                <h2>⚙️ Componentes Principales</h2>
+                <div class="two-col" style="font-size: 0.85em;">
+                    <div>
+                        <h4 style="color: #42b983;">Orquestación</h4>
+                        <p><strong>LangGraph</strong></p>
+                        <p>StateGraph con 8 nodos y decisiones dinámicas</p>
+                    </div>
+                    <div>
+                        <h4 style="color: #42b983;">Herramientas</h4>
+                        <p><strong>3 Tools Nativos</strong></p>
+                        <p>Tool calling con decoradores @tool</p>
+                    </div>
+                </div>
+                <div class="two-col" style="font-size: 0.85em; margin-top: 30px;">
+                    <div>
+                        <h4 style="color: #42b983;">Microservicios</h4>
+                        <p><strong>3 FastAPI MCPs</strong></p>
+                        <p>Sentimiento, Influencia, Propagación</p>
+                    </div>
+                    <div>
+                        <h4 style="color: #42b983;">Seguridad</h4>
+                        <p><strong>Detección de Ataques</strong></p>
+                        <p>Inyecciones, PII, Rate Limiting</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- LangGraph vs LangChain -->
+            <section>
+                <h2>🔄 LangGraph vs LangChain</h2>
+                <table style="margin-top: 30px;">
+                    <tr>
+                        <th>Característica</th>
+                        <th>LangChain</th>
+                        <th>LangGraph ✓</th>
+                    </tr>
+                    <tr>
+                        <td>Cadenas lineales</td>
+                        <td style="color: #42b983;">✓</td>
+                        <td style="color: #42b983;">✓</td>
+                    </tr>
+                    <tr>
+                        <td>Decisiones dinámicas</td>
+                        <td style="color: #f97316;">✗</td>
+                        <td style="color: #42b983;">✓</td>
+                    </tr>
+                    <tr>
+                        <td>Ciclos/Reintento</td>
+                        <td style="color: #f97316;">✗</td>
+                        <td style="color: #42b983;">✓</td>
+                    </tr>
+                    <tr>
+                        <td>Reflection Pattern</td>
+                        <td style="color: #f97316;">✗</td>
+                        <td style="color: #42b983;">✓</td>
+                    </tr>
+                    <tr>
+                        <td>HITL (Human Approval)</td>
+                        <td style="color: #f97316;">✗</td>
+                        <td style="color: #42b983;">✓</td>
+                    </tr>
+                </table>
+                <p style="margin-top: 30px; font-size: 0.8em; color: #888;">
+                    <strong>Conclusión:</strong> LangGraph permite decisiones dinámicas = esencial para patrones avanzados
+                </p>
+            </section>
+
+            <!-- TOOLS DISPONIBLES -->
+            <section>
+                <h2>🛠️ 3 Tools Nativos</h2>
+                <div style="font-size: 0.85em; text-align: left; margin-top: 30px;">
+                    <h4 style="color: #42b983;">1. get_influence_metrics()</h4>
+                    <p>Identifica usuarios influyentes basado en engagement y reach</p>
+                    <p style="color: #888;">Retorna: JSON con ranking de autores y scores</p>
+
+                    <h4 style="color: #42b983; margin-top: 20px;">2. analyze_sentiment()</h4>
+                    <p>Calcula distribución de sentimiento (POSITIVE, NEGATIVE, NEUTRAL, UNKNOWN)</p>
+                    <p style="color: #888;">Retorna: Porcentajes por categoría</p>
+
+                    <h4 style="color: #42b983; margin-top: 20px;">3. trace_propagation()</h4>
+                    <p>Rastrea cómo se propaga un post (árbol de retweets con BFS)</p>
+                    <p style="color: #888;">Retorna: Estructura JSON del árbol de propagación</p>
+                </div>
+            </section>
+
+            <!-- TOOL CALLING NATIVO -->
+            <section>
+                <h2>📞 Tool Calling Nativo</h2>
+                <div style="font-size: 0.8em;">
+                    <p style="margin-bottom: 20px;"><strong>¿Cómo el LLM sabe cuáles tools puede usar?</strong></p>
+                    <pre><code class="python">@tool
+def get_influence_metrics() -> str:
+    """Obtener usuarios más influyentes"""
+    ...
+
+# LLM ve automáticamente:
+# - Nombre del tool
+# - Descripción
+# - Parámetros esperados
+# - Tipo de retorno
+
+agent.bind_tools([TOOLS])  # Registrar tools
+                    </code></pre>
+                    <p style="margin-top: 20px; color: #42b983;">
+                        ✓ El LLM decide cuándo usarlos
+                    </p>
+                    <p style="color: #42b983;">
+                        ✓ No necesita instrucciones manuales
+                    </p>
+                </div>
+            </section>
+
+            <!-- MCPs -->
+            <section>
+                <h2>🌐 3 Microservicios (MCPs)</h2>
+                <table style="margin-top: 30px; font-size: 0.75em;">
+                    <tr>
+                        <th>MCP</th>
+                        <th>Puerto</th>
+                        <th>Función</th>
+                        <th>Tech</th>
+                    </tr>
+                    <tr>
+                        <td><strong>Sentiment</strong></td>
+                        <td>8001</td>
+                        <td>Analizar sentimiento</td>
+                        <td>FastAPI + TextBlob</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Influence</strong></td>
+                        <td>8002</td>
+                        <td>Calcular influencia</td>
+                        <td>FastAPI + Pandas</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Propagation</strong></td>
+                        <td>8003</td>
+                        <td>Rastrear propagación</td>
+                        <td>FastAPI + BFS</td>
+                    </tr>
+                </table>
+                <p style="margin-top: 30px; font-size: 0.85em; text-align: left;">
+                    <strong>¿Por qué servicios separados?</strong>
+                </p>
+                <ul style="font-size: 0.8em;">
+                    <li>✓ Escalabilidad independiente</li>
+                    <li>✓ Fallos aislados</li>
+                    <li>✓ Desarrollo paralelo</li>
+                </ul>
+            </section>
+
+            <!-- PATRÓN: DEFAULT -->
+            <section>
+                <h2>🎯 Patrón 1: DEFAULT (Normal)</h2>
+                <div class="diagram">
+Usuario: "¿Quiénes son los influyentes?"
+    ↓
+Agent procesa → decide "necesito get_influence_metrics"
+    ↓
+Execute tool (HTTP request)
+    ↓
+Generate response
+    ↓
+Respuesta natural al usuario
+                </div>
+                <p style="margin-top: 30px; font-size: 0.8em;">
+                    <span class="success">✓ Rápido</span> •
+                    <span class="success">✓ Eficiente</span> •
+                    <span class="warning">Sin explicación del razonamiento</span>
+                </p>
+            </section>
+
+            <!-- PATRÓN: ReAct -->
+            <section>
+                <h2>🧠 Patrón 2: ReAct (Reasoning)</h2>
+                <p style="margin-bottom: 30px; font-size: 0.9em;">
+                    <strong>ReAct = Thought → Action → Observation → Reflection</strong>
+                </p>
+                <div class="diagram">
+Thought: "Necesito identificar usuarios influyentes"
+    ↓
+Action: Ejecutar get_influence_metrics()
+    ↓
+Observation: Veo los resultados del tool
+    ↓
+Reflection: "La respuesta es clara y completa"
+    ↓
+Final Answer: Generamos respuesta natural
+                </div>
+                <p style="margin-top: 30px; font-size: 0.8em;">
+                    <span class="success">✓ Visible el razonamiento</span> •
+                    <span class="warning">Más lento (2 LLM calls)</span>
+                </p>
+            </section>
+
+            <!-- PATRÓN: Reflection -->
+            <section>
+                <h2>🔍 Patrón 3: Reflection (Auto-evaluación)</h2>
+                <p style="margin-bottom: 30px; font-size: 0.9em;">
+                    <strong>¿Mi respuesta es suficiente? Si NO → reintento</strong>
+                </p>
+                <div class="diagram">
+Execute tool 1
+    ↓
+[Reflection] ¿Es suficiente?
+    ├─ INSUFFICIENT → reintenta (máx 1)
+    └─ SUFFICIENT → continuar
+    ↓
+Execute tool 2 (si fue necesario)
+    ↓
+Generate response
+                </div>
+                <p style="margin-top: 30px; font-size: 0.8em;">
+                    <span class="success">✓ Auto-corrección</span> •
+                    <span class="success">✓ Mejor calidad</span> •
+                    <span class="warning">Más lento (evaluación LLM)</span>
+                </p>
+            </section>
+
+            <!-- PATRÓN: Planning -->
+            <section>
+                <h2>📋 Patrón 4: Planning (Descomposición)</h2>
+                <p style="margin-bottom: 30px; font-size: 0.9em;">
+                    <strong>Dividir pregunta compleja en pasos antes de ejecutar</strong>
+                </p>
+                <div class="diagram">
+Usuario: "Influencers + sentimiento?"
+    ↓
+[Planning] Generar plan:
+  Paso 1: get_influence_metrics()
+  Paso 2: analyze_sentiment()
+  Paso 3: Combinar resultados
+    ↓
+Ejecutar paso 1 ✓
+Ejecutar paso 2 ✓
+Ejecutar paso 3 ✓
+    ↓
+Respuesta estructurada
+                </div>
+                <p style="margin-top: 30px; font-size: 0.8em;">
+                    <span class="success">✓ Para queries complejas</span> •
+                    <span class="success">✓ Organizado</span>
+                </p>
+            </section>
+
+            <!-- PATRÓN: HITL -->
+            <section>
+                <h2>👤 Patrón 5: HITL (Human-in-the-Loop)</h2>
+                <p style="margin-bottom: 30px; font-size: 0.9em;">
+                    <strong>Pedir aprobación humana antes de ejecutar tools</strong>
+                </p>
+                <div class="diagram">
+Agent decide: "necesito ejecutar get_influence_metrics"
+    ↓
+[PAUSA] Mostrar al usuario:
+  Tool: get_influence_metrics
+  Input: {}
+    ↓
+Usuario responde: ¿si o no?
+    ├─ SI  → Ejecutar tool + responder
+    └─ NO  → Cancelar acción
+                </div>
+                <p style="margin-top: 30px; font-size: 0.8em;">
+                    <span class="success">✓ Control humano</span> •
+                    <span class="success">✓ IA segura</span> •
+                    <span class="warning">Requiere interacción manual</span>
+                </p>
+            </section>
+
+            <!-- FLUJO CONDICIONAL -->
+            <section>
+                <h2>⚡ Flujo Condicional (Conditional Edges)</h2>
+                <p style="margin-bottom: 30px; font-size: 0.85em;">
+                    <strong>LangGraph decide en tiempo de ejecución qué nodo visitar</strong>
+                </p>
+                <pre><code class="python">def route_after_tool_selection(state):
+    mode = state.get("pattern_mode")
+    has_tool = state.get("last_tool_result", {}).get("is_tool_call")
+
+    if not has_tool:
+        return "generate_response"  # Sin tool
+    if mode == "react":
+        return "node_react_think"   # Razonamiento
+    if mode == "hitl":
+        return "node_hitl_check"    # Aprobación
+    if mode == "planning":
+        return "node_plan"          # Descomposición
+    return "execute_tool"           # Normal
+                </code></pre>
+                <p style="margin-top: 20px; color: #42b983;">
+                    ✓ Mismo agente, 5 comportamientos diferentes
+                </p>
+            </section>
+
+            <!-- SEGURIDAD 1: INYECCIONES -->
+            <section>
+                <h2>🔒 Seguridad 1: Detección de Inyecciones</h2>
+                <p style="margin-bottom: 20px; font-size: 0.9em;">
+                    <strong>Detectar ataques: "Olvida instrucciones anteriores"</strong>
+                </p>
+                <div style="text-align: left; font-size: 0.8em;">
+                    <p><strong>30+ patrones regex para detectar:</strong></p>
+                    <ul style="margin-top: 10px; margin-left: 20px;">
+                        <li><code>ignore</code>, <code>forget</code>, <code>bypass</code></li>
+                        <li><code>system prompt</code>, <code>instructions</code></li>
+                        <li><code>jailbreak</code>, <code>exploit</code></li>
+                        <li>Variaciones en español e inglés</li>
+                    </ul>
+                    <p style="margin-top: 20px;"><strong>Severidad:</strong> LOW • MEDIUM • HIGH</p>
+                    <p style="margin-top: 20px;"><strong>Rate Limiting:</strong> Máximo 20 requests/minuto por usuario</p>
+                </div>
+            </section>
+
+            <!-- SEGURIDAD 2: PII -->
+            <section>
+                <h2>🔐 Seguridad 2: Detección y Masking de PII</h2>
+                <p style="margin-bottom: 20px; font-size: 0.9em;">
+                    <strong>Detectar y ocultar datos personales sensibles</strong>
+                </p>
+                <div style="text-align: left; font-size: 0.8em;">
+                    <p><strong>Tipos detectados:</strong></p>
+                    <ul style="margin-top: 10px; margin-left: 20px;">
+                        <li>Email → <code>[MASKED-EMAIL]</code></li>
+                        <li>Teléfono → <code>[MASKED-PHONE]</code></li>
+                        <li>Tarjeta crédito → <code>[MASKED-CC]</code></li>
+                        <li>SSN, Pasaporte, IP → Masking automático</li>
+                    </ul>
+                    <p style="margin-top: 20px;"><strong>Resultado:</strong> Usuario nunca ve datos sensibles</p>
+                </div>
+            </section>
+
+            <!-- AUDITORÍA -->
+            <section>
+                <h2>📊 Auditoría y Logging (ACID)</h2>
+                <p style="margin-bottom: 20px; font-size: 0.9em;">
+                    <strong>Cada interacción se registra en SQLite</strong>
+                </p>
+                <pre style="font-size: 0.7em;"><code>
+timestamp  | session_id | user_id | query | tool_called |
+2026-05-04 | abc123     | user_1  | ¿...? | influence   |
+has_injection | pii_detected | severity
+false         | false        | SAFE
+                </code></pre>
+                <div style="text-align: left; font-size: 0.8em; margin-top: 20px;">
+                    <p><strong>✓ ACID garantizado:</strong> Transacciones atomicas (todo o nada)</p>
+                    <p><strong>✓ Trazabilidad:</strong> Quién, qué, cuándo</p>
+                    <p><strong>✓ Seguridad:</strong> Detectar patrones de ataque</p>
+                </div>
+            </section>
+
+            <!-- FinOps -->
+            <section>
+                <h2>💰 FinOps: Cost Tracking</h2>
+                <div style="font-size: 0.85em;">
+                    <p style="margin-bottom: 20px;"><strong>Rastrear costos por token</strong></p>
+                    <div class="tech-grid">
+                        <div>
+                            <h4>GPT-4o-mini</h4>
+                            <p>Input: $0.15/1M tokens</p>
+                            <p>Output: $0.60/1M tokens</p>
+                        </div>
+                        <div>
+                            <h4>Ollama (Local)</h4>
+                            <p>Gratis (sin API)</p>
+                            <p>Barato si tienes GPU</p>
+                        </div>
+                    </div>
+                    <div style="margin-top: 30px; text-align: left;">
+                        <p><strong>Métricas por query:</strong> Query cost + Session cost</p>
+                        <p style="margin-top: 10px;"><strong>Proyecciones:</strong> Estimación mensual/anual basada en uso</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- MEMORY -->
+            <section>
+                <h2>🧠 Memoria: Short-term + Long-term</h2>
+                <table style="margin-top: 30px; font-size: 0.75em;">
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Duración</th>
+                        <th>Usar Para</th>
+                        <th>Tecnología</th>
+                    </tr>
+                    <tr>
+                        <td><strong>Short-term</strong></td>
+                        <td>Esta sesión</td>
+                        <td>Contexto inmediato</td>
+                        <td>En memoria (state)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Long-term</strong></td>
+                        <td>Sesiones pasadas</td>
+                        <td>Recuperar contexto anterior</td>
+                        <td>SQLite / ChromaDB</td>
+                    </tr>
+                </table>
+                <div style="margin-top: 30px; font-size: 0.8em;">
+                    <p><strong>Memoria Backends (intercambiable):</strong></p>
+                    <ul>
+                        <li>SQLite: Búsqueda rápida por keywords</li>
+                        <li>ChromaDB: Búsqueda semántica (por significado)</li>
+                        <li>Hybrid: Lo mejor de ambos</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- OBSERVABILIDAD -->
+            <section>
+                <h2>📈 Observabilidad (Ragas Evaluation)</h2>
+                <div style="font-size: 0.85em;">
+                    <p style="margin-bottom: 20px;"><strong>Medir calidad de respuestas con Ragas</strong></p>
+                    <div class="tech-grid">
+                        <div>
+                            <h4>Answer Relevancy</h4>
+                            <p>¿Responde la pregunta?</p>
+                            <p style="color: #888;">0.0 - 1.0</p>
+                        </div>
+                        <div>
+                            <h4>Faithfulness</h4>
+                            <p>¿Está basado en datos reales?</p>
+                            <p style="color: #888;">0.0 - 1.0</p>
+                        </div>
+                    </div>
+                    <div style="margin-top: 30px; text-align: left;">
+                        <p><strong>✓ LocalTracer:</strong> Sin dependencias externas</p>
+                        <p style="margin-top: 10px;"><strong>✓ Métricas:</strong> Latency, tokens, quality score</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- DASHBOARD -->
+            <section>
+                <h2>📊 Dashboard (Streamlit)</h2>
+                <p style="margin-bottom: 30px; font-size: 0.9em;">
+                    <strong>Visualización en tiempo real de:</strong>
+                </p>
+                <div class="tech-grid">
+                    <div>
+                        <h4>📊 4 KPIs</h4>
+                        <ul style="font-size: 0.8em;">
+                            <li>Total Queries</li>
+                            <li>Avg Latency</li>
+                            <li>Session Cost</li>
+                            <li>Quality Score</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4>📈 4 Gráficos</h4>
+                        <ul style="font-size: 0.8em;">
+                            <li>Latency Timeline</li>
+                            <li>Token Usage</li>
+                            <li>Tool Distribution</li>
+                            <li>Quality Scores</li>
+                        </ul>
+                    </div>
+                </div>
+                <p style="margin-top: 30px; font-size: 0.85em;">
+                    ✓ <code>streamlit run dashboard/app.py</code>
+                </p>
+            </section>
+
+            <!-- ARQUITECTURA COMPLETA -->
+            <section>
+                <h2>🏛️ Arquitectura Completa de 6 Fases</h2>
+                <table style="margin-top: 30px; font-size: 0.75em;">
+                    <tr>
+                        <th>Fase</th>
+                        <th>Componente</th>
+                        <th>Status</th>
+                    </tr>
+                    <tr>
+                        <td><strong>1</strong></td>
+                        <td>LangGraph + 3 Tools + 3 MCPs</td>
+                        <td style="color: #42b983;">✓ Complete</td>
+                    </tr>
+                    <tr>
+                        <td><strong>2</strong></td>
+                        <td>FinOps (Cost Tracking)</td>
+                        <td style="color: #42b983;">✓ Complete</td>
+                    </tr>
+                    <tr>
+                        <td><strong>3</strong></td>
+                        <td>Long-term Memory</td>
+                        <td style="color: #42b983;">✓ Complete</td>
+                    </tr>
+                    <tr>
+                        <td><strong>4</strong></td>
+                        <td>Observability (Ragas)</td>
+                        <td style="color: #42b983;">✓ Complete</td>
+                    </tr>
+                    <tr>
+                        <td><strong>5</strong></td>
+                        <td>LLM Factory (Ollama)</td>
+                        <td style="color: #42b983;">✓ Complete</td>
+                    </tr>
+                    <tr>
+                        <td><strong>6</strong></td>
+                        <td>Design Patterns (4)</td>
+                        <td style="color: #42b983;">✓ Complete</td>
+                    </tr>
+                </table>
+                <p style="margin-top: 30px; font-size: 0.85em;">
+                    <strong>+ Seguridad + Dashboard + Documentación</strong>
+                </p>
+            </section>
+
+            <!-- DEMO -->
+            <section>
+                <h2>🎬 Demo en Vivo</h2>
+                <div style="font-size: 0.9em; text-align: left; margin-top: 30px;">
+                    <p><strong>Paso 1: Arrancar MCPs</strong></p>
+                    <pre style="font-size: 0.7em;"><code>python -m services.sentiment_mcp.main
+python -m services.influence_mcp.main
+python -m services.propagation_mcp.main</code></pre>
+
+                    <p style="margin-top: 20px;"><strong>Paso 2: Arrancar CLI</strong></p>
+                    <pre style="font-size: 0.7em;"><code>python cli.py</code></pre>
+
+                    <p style="margin-top: 20px;"><strong>Paso 3: Hacer preguntas</strong></p>
+                    <p style="color: #888; font-size: 0.8em;">
+                        "¿Quiénes son los más influyentes?"<br>
+                        "mode react" → repite con razonamiento visible<br>
+                        "mode reflection" → auto-evaluación<br>
+                        "mode planning" → descomposición<br>
+                        "mode hitl" → aprobación manual
+                    </p>
+                </div>
+            </section>
+
+            <!-- TECNOLOGÍAS USADAS -->
+            <section>
+                <h2>🔧 Stack Tecnológico</h2>
+                <div class="tech-grid">
+                    <div>
+                        <h4>Orquestación</h4>
+                        <p>LangGraph</p>
+                        <p>LangChain</p>
+                    </div>
+                    <div>
+                        <h4>API Web</h4>
+                        <p>FastAPI</p>
+                        <p>Pydantic</p>
+                    </div>
+                    <div>
+                        <h4>Datos</h4>
+                        <p>Pandas</p>
+                        <p>SQLite</p>
+                    </div>
+                    <div>
+                        <h4>Búsqueda</h4>
+                        <p>ChromaDB</p>
+                        <p>Embeddings</p>
+                    </div>
+                    <div>
+                        <h4>LLMs</h4>
+                        <p>OpenAI (GPT-4o-mini)</p>
+                        <p>Ollama (local)</p>
+                    </div>
+                    <div>
+                        <h4>Dashboard</h4>
+                        <p>Streamlit</p>
+                        <p>Matplotlib</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- POR QUÉ ESTA ARQUITECTURA -->
+            <section>
+                <h2>❓ ¿Por Qué Esta Arquitectura?</h2>
+                <div style="font-size: 0.85em; text-align: left;">
+                    <p style="margin-bottom: 20px;">
+                        <strong class="highlight">LangGraph</strong> en lugar de LangChain
+                    </p>
+                    <ul style="margin-bottom: 30px; font-size: 0.8em;">
+                        <li>✓ Soporta decisiones dinámicas</li>
+                        <li>✓ Permite ciclos (reintentos)</li>
+                        <li>✓ Essential para ReAct, Reflection, Planning</li>
+                    </ul>
+
+                    <p style="margin-bottom: 20px;">
+                        <strong class="highlight">3 Microservicios</strong> separados
+                    </p>
+                    <ul style="margin-bottom: 30px; font-size: 0.8em;">
+                        <li>✓ Escalabilidad independiente</li>
+                        <li>✓ Fallos aislados</li>
+                        <li>✓ Equipos pueden trabajar en paralelo</li>
+                    </ul>
+
+                    <p style="margin-bottom: 20px;">
+                        <strong class="highlight">Tool Calling Nativo</strong>
+                    </p>
+                    <ul style="font-size: 0.8em;">
+                        <li>✓ LLM decide automáticamente cuándo usarlos</li>
+                        <li>✓ No requiere instrucciones manuales</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- RESULTADOS -->
+            <section>
+                <h2>✨ Resultados Clave</h2>
+                <div style="font-size: 0.9em; text-align: left; margin-top: 30px;">
+                    <p style="margin-bottom: 20px;">
+                        <span class="success">✓ Análisis inteligente</span> de 8,500 posts
+                    </p>
+                    <p style="margin-bottom: 20px;">
+                        <span class="success">✓ Seguridad de nivel empresa</span> (inyecciones, PII, auditoría)
+                    </p>
+                    <p style="margin-bottom: 20px;">
+                        <span class="success">✓ 4 patrones avanzados</span> (ReAct, Reflection, Planning, HITL)
+                    </p>
+                    <p style="margin-bottom: 20px;">
+                        <span class="success">✓ Control de costos</span> (tracking tokens + proyecciones)
+                    </p>
+                    <p style="margin-bottom: 20px;">
+                        <span class="success">✓ Observabilidad completa</span> (latency, quality, audit logs)
+                    </p>
+                    <p style="margin-bottom: 20px;">
+                        <span class="success">✓ Modular y escalable</span> (6 fases implementadas)
+                    </p>
+                    <p style="margin-bottom: 20px;">
+                        <span class="success">✓ Uso de LLMs locales</span> (gratis con Ollama)
+                    </p>
+                </div>
+            </section>
+
+            <!-- CONCLUSIÓN -->
+            <section>
+                <h2>🎓 Conclusión</h2>
+                <div style="margin-top: 40px; font-size: 0.95em;">
+                    <p style="margin-bottom: 30px;">
+                        Un <span class="highlight">agente conversacional completo</span> que demuestra:
+                    </p>
+                    <ul style="font-size: 0.9em; line-height: 2;">
+                        <li>✓ Arquitectura moderna (LangGraph + microservicios)</li>
+                        <li>✓ Tool calling inteligente</li>
+                        <li>✓ Patrones avanzados de IA</li>
+                        <li>✓ Seguridad enterprise-grade</li>
+                        <li>✓ Cost awareness</li>
+                        <li>✓ Observabilidad completa</li>
+                    </ul>
+                </div>
+                <p style="margin-top: 50px; font-size: 0.8em; color: #888;">
+                    <strong>Pregunta final:</strong> ¿Alguna duda sobre la arquitectura o los patrones?
+                </p>
+            </section>
+
+            <!-- REFERENCIAS -->
+            <section>
+                <h2>📚 Documentación Completa</h2>
+                <div style="font-size: 0.85em; text-align: left;">
+                    <p><strong>En el repositorio:</strong></p>
+                    <ul style="margin-top: 15px;">
+                        <li><code>GLOSARIO_TERMINOS.md</code> — Referencia de 738 líneas</li>
+                        <li><code>PHASE_6_DEMO.md</code> — Guía de demostración</li>
+                        <li><code>PROYECTO_EXPLICADO_SIMPLE.md</code> — Explicación no-técnica</li>
+                        <li><code>TECHNICAL_REPORT.md</code> — Análisis profundo</li>
+                        <li><code>POR_QUE_CADA_COSA.md</code> — Justificación de decisiones</li>
+                        <li><code>MCPs_TECHNICAL_GUIDE.md</code> — Guía de microservicios</li>
+                    </ul>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.min.js"></script>
+    <script>
+        Reveal.initialize({
+            hash: true,
+            width: 1000,
+            height: 700,
+            margin: 0.1,
+            minScale: 0.2,
+            maxScale: 2.0,
+            transition: 'slide',
+            transitionSpeed: 'default',
+            controlsTutorial: true,
+            keyboard: true,
+        });
+    </script>
+</body>
+</html>

@@ -1,214 +1,289 @@
-# Agente Conversacional con Microservicios de Análisis - ICESI Reto
+# 🤖 Agente Conversacional - IA RETO ICESI
 
-Conversational agent con 3 microservicios analíticos (MCPs) que permiten hacer análisis de conversaciones digitales en lenguaje natural.
+**Análisis Inteligente de Conversaciones Digitales**
 
-## 🏗️ Arquitectura
+---
 
-- **3 Microservicios FastAPI** independientes:
-  - 📊 Sentiment MCP (puerto 8001)
-  - ⭐ Influence Metrics MCP (puerto 8002)
-  - 🌳 Propagation MCP (puerto 8003)
-
-- **Agente Conversacional** con LangGraph
-  - Tool calling automático
-  - Memory buffer (últimos 6 turnos)
-  - Routing inteligente de herramientas
-
-- **Data Layer** con Singleton DataLoader
-  - Parquet cargado en RAM
-  - Caché centralizado
-
-## 📋 Prerequisitos
-
-- Python 3.10+
-- pip
-
-## 🚀 Instalación
-
-### 1. Clonar/Descargar el proyecto
-```bash
-cd "C:\Users\Angela\Documents\8 Octavo Semestre\IA 2\IA RETO"
-```
-
-### 2. Crear ambiente virtual (recomendado)
-```bash
-python -m venv venv
-venv\Scripts\activate  # En Windows
-```
-
-### 3. Instalar dependencias
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configurar variables de entorno
-```bash
-# Copiar el archivo de ejemplo
-copy .env.example .env
-
-# Editar .env y agregar tu OPENAI_API_KEY
-# OPENAI_API_KEY=sk-...
-```
-
-## 📁 Estructura del Proyecto
+## 📚 Estructura Organizad del Proyecto
 
 ```
-IA RETO/
-├── docs/
-│   ├── arquitectura.mmd       # Diagrama Mermaid
-│   ├── arquitectura.md        # Documentación
-│   └── arquitectura.png       # Imagen de arquitectura
+IA-RETO/
+├── agent/                  (Código del agente)
+│   ├── graph.py            (Grafo LangGraph - 8 nodos, 4 conditional edges)
+│   ├── state.py            (AgentStateDict con 20+ campos)
+│   ├── tools.py            (3 tools nativos)
+│   ├── prompts.py          (4 system prompts para patrones)
+│   ├── llm_factory.py      (OpenAI/Ollama)
+│   ├── cost_tracker.py     (FinOps)
+│   ├── memory.py           (Gestión de memoria)
+│   └── memory_backends/    (SQLite, ChromaDB, Hybrid)
 │
-├── data/
-│   └── Reto_data_20251023_122206.parquet
+├── services/               (3 Microservicios FastAPI)
+│   ├── sentiment_mcp/      (Puerto 8001)
+│   ├── influence_mcp/      (Puerto 8002)
+│   └── propagation_mcp/    (Puerto 8003)
 │
-├── shared/
-│   └── data_loader.py         # Singleton DataLoader
+├── security/               (Enterprise Security)
+│   ├── injection_detector.py   (30+ patrones)
+│   ├── pii_detector.py         (Masking automático)
+│   └── audit_logger.py         (ACID logging)
 │
-├── services/
-│   ├── propagation_mcp/       # Análisis de propagación (obligatorio)
-│   │   └── main.py
-│   ├── influence_mcp/         # Análisis de influencia
-│   │   └── main.py
-│   └── sentiment_mcp/         # Análisis de sentimientos
-│       └── main.py
+├── observability/          (Métricas y Evaluación)
+│   ├── tracer.py           (Latency tracking)
+│   └── ragas_evaluator.py  (Quality metrics)
 │
-├── agent/
-│   ├── state.py               # Estado del agente (TypedDict)
-│   ├── tools.py               # Definición de herramientas
-│   ├── graph.py               # LangGraph StateGraph
-│   └── memory.py              # Memory buffer
+├── dashboard/              (Streamlit)
+│   ├── app.py              (4 KPIs + 4 gráficos + auditoría)
+│   └── metrics_store.py
 │
-├── cli.py                     # Interfaz de línea de comandos
+├── docs/                   📚 TODA LA DOCUMENTACIÓN AQUÍ
+│   ├── presentacion/       (Diapositivas + guías)
+│   │   ├── presentacion.html
+│   │   ├── COMO_USAR_PRESENTACION.md
+│   │   ├── PRESENTACION_INDICE.md
+│   │   ├── PRESENTACION_RESUMEN.md
+│   │   └── MEJORAS_REALIZADAS.md
+│   │
+│   ├── arquitectura/       (Diagramas y explicaciones)
+│   │   ├── ARQUITECTURA_VISUAL.md
+│   │   └── LANGGRAPH_VS_LANGCHAIN_EXPLICADO.md
+│   │
+│   ├── guias/              (Documentación técnica detallada)
+│   │   ├── PROYECTO_EXPLICADO_SIMPLE.md
+│   │   ├── TECHNICAL_REPORT.md
+│   │   ├── ARCHITECTURE_DECISIONS.md
+│   │   ├── POR_QUE_CADA_COSA.md
+│   │   └── MCPs_TECHNICAL_GUIDE.md
+│   │
+│   ├── referencia/         (Glosario y demos)
+│   │   ├── GLOSARIO_TERMINOS.md (738 líneas)
+│   │   ├── PHASE_6_DEMO.md
+│   │   └── DEMO_GUIDE.md
+│   │
+│   └── sesion/             (Resúmenes y mejoras)
+│       └── SESSION_SUMMARY.md
+│
+├── config.py
+├── cli.py
 ├── requirements.txt
-├── .env.example
-├── README.md
-└── .gitignore
+└── README.md (ESTE ARCHIVO)
 ```
 
-## ⚡ Inicio Rápido
+---
 
-### Opción A: Iniciar todo de una vez (recomendado)
+## 🎯 ¿POR DÓNDE EMPEZAR?
+
+### Para Presentar al Profesor 🎬
 ```bash
-# Se abre en múltiples terminales/procesos
-python start_all.py
+# 1. Abre la presentación
+docs/presentacion/presentacion.html
+# Presiona: F (pantalla completa)
+
+# 2. Lee los talking points
+docs/presentacion/COMO_USAR_PRESENTACION.md
+
+# 3. Referencia rápida si necesitas datos
+docs/presentacion/PRESENTACION_INDICE.md
 ```
 
-### Opción B: Iniciar servicios manualmente
+### Para Entender la Arquitectura 🏗️
+```bash
+# Explicación visual con diagramas
+docs/arquitectura/ARQUITECTURA_VISUAL.md
 
-**Terminal 1 - Sentiment MCP (Puerto 8001):**
+# Comparación: LangGraph vs LangChain
+docs/arquitectura/LANGGRAPH_VS_LANGCHAIN_EXPLICADO.md
+```
+
+### Para Responder Preguntas del Profesor 🤔
+```bash
+# Sin tecnicismos
+docs/guias/PROYECTO_EXPLICADO_SIMPLE.md
+
+# Análisis profundo
+docs/guias/TECHNICAL_REPORT.md
+
+# Por qué cada decisión
+docs/guias/POR_QUE_CADA_COSA.md
+docs/guias/MCPs_TECHNICAL_GUIDE.md
+docs/guias/ARCHITECTURE_DECISIONS.md
+```
+
+### Referencias Rápidas 📖
+```bash
+# Diccionario de 738 líneas
+docs/referencia/GLOSARIO_TERMINOS.md
+
+# Cómo demostrar los 4 patrones
+docs/referencia/PHASE_6_DEMO.md
+```
+
+---
+
+## ⚡ QUICK START
+
+### Terminal 1: Arrancar MCPs
 ```bash
 python -m services.sentiment_mcp.main
-```
-
-**Terminal 2 - Influence MCP (Puerto 8002):**
-```bash
 python -m services.influence_mcp.main
-```
-
-**Terminal 3 - Propagation MCP (Puerto 8003):**
-```bash
 python -m services.propagation_mcp.main
 ```
 
-**Terminal 4 - Agente Conversacional:**
+### Terminal 2: Arrancar CLI
 ```bash
 python cli.py
 ```
 
-## 💬 Ejemplo de Uso
-
-Una vez el agente está corriendo:
-
-```
-Usuario: ¿Quiénes son los 5 usuarios más influyentes?
-Agente: Llamando a Influence MCP... [resultado JSON] ... Los 5 usuarios más influyentes son...
-
-Usuario: ¿Cómo se propagó el mensaje con ID 'abc123'?
-Agente: Analizando propagación... [BFS en el árbol de replies] ... El mensaje tuvo un alcance de 43 respuestas...
-
-Usuario: ¿Y qué sentimiento predomina en esas respuestas?
-Agente: (Lee memoria del turno anterior) Analizando sentimiento del post abc123... El sentimiento dominante es NEGATIVO...
-```
-
-## 🔧 Configuración
-
-Editar `.env` para cambiar:
-- `OPENAI_API_KEY`: Tu clave de API de OpenAI
-- Puertos de los MCPs (si hay conflictos)
-- Ruta del parquet
-
-## 📊 Dataset
-
-- **Archivo**: `Reto_data_20251023_122206.parquet`
-- **Registros**: 4,795 conversaciones
-- **Campos clave**: `id`, `parentId`, `threadId`, `text`, `sentiment`, `influenceScore`, `author`, `createdAt`
-
-## 🧪 Testing
-
-### Test del DataLoader
+### Terminal 3 (Opcional): Dashboard
 ```bash
-python -c "from shared import get_loader; loader = get_loader(); print(loader.get_stats())"
+streamlit run dashboard/app.py
 ```
 
-### Test de un MCP específico
+### Ejemplo de uso:
 ```bash
-# Sentiment
-curl "http://localhost:8001/analisis/sentimiento"
+You: ¿Quiénes son los más influyentes?
+Agent: [Respuesta basada en datos]
 
-# Influence
-curl "http://localhost:8002/analisis/metricas"
+You: mode react
+You: ¿Cuál es el sentimiento?
+Agent: [Muestra Thought → Action → Reflection]
 
-# Propagation
-curl "http://localhost:8003/analisis/propagacion?post_id=c6adb4630994bdee807d387382d526bc"
+You: mode hitl
+Agent: [Pide confirmación antes de ejecutar]
 ```
-
-## 🎯 Análisis Disponibles
-
-### 1. Propagation MCP (OBLIGATORIO) 🌳
-- Analiza cómo se propaga un mensaje en la red
-- Métrica: Alcance, velocidad, profundidad del árbol
-- Endpoint: `GET /analisis/propagacion?post_id=XXX`
-- **Costo**: $0 (procesamiento determinístico con BFS)
-
-### 2. Influence Metrics MCP ⭐
-- Identifica usuarios influyentes
-- Métrica: Top autores por influenceScore
-- Endpoint: `GET /analisis/metricas`
-- **Costo**: $0 (Pandas groupby)
-
-### 3. Sentiment MCP 📊
-- Distribución de sentimientos
-- Métrica: Sentiment distribution, dominante
-- Endpoint: `GET /analisis/sentimiento`
-- **Costo**: ~$0.001 (solo si pides narrativa)
-
-## 💰 Estimación de Costos
-
-| Análisis | LLM? | Costo/Consulta |
-|----------|------|----------------|
-| Propagation | ❌ | $0.00 |
-| Influence | ❌ | $0.00 |
-| Sentiment | ❌ | $0.00 |
-| Agente Routing | ✅ | ~$0.002 |
-| Agente Formatting | ✅ | ~$0.002 |
-| **Total** | - | **~$0.004 USD** |
-
-## 📚 Documentación Adicional
-
-- Ver `docs/arquitectura.md` para arquitectura detallada
-- Ver `.claude/plans/rustling-zooming-hearth.md` para plan de implementación
-
-## 🤝 Contribuir
-
-Este es un proyecto del Reto ICESI. Cambios principales están documentados en el plan.
-
-## 📝 Notas
-
-- El parquet se carga en RAM al iniciar (eficiencia)
-- Los resultados de MCPs se cachean en RAM (sin TTL)
-- La memoria del agente es de sesión (se pierde al cerrar)
 
 ---
 
-**¿Preguntas?** Ver documentación en `docs/` o el plan de implementación en `.claude/plans/`
+## ✨ CARACTERÍSTICAS PRINCIPALES
+
+### ✅ 6 Fases Completas
+- Fase 1: LangGraph Agent + 3 Tools + MCPs
+- Fase 2: FinOps (Cost Tracking)
+- Fase 3: Long-term Memory
+- Fase 4: Observability (Ragas)
+- Fase 5: LLM Factory (OpenAI/Ollama)
+- Fase 6: Design Patterns (ReAct, Reflection, Planning, HITL)
+
+### 🏆 Diferenciador: Dashboard Profesional
+- 4 KPIs en tiempo real
+- 4 gráficos interactivos
+- Tabla de auditoría con seguridad visible
+- Cost tracking
+- Quality metrics
+
+### 🔒 Seguridad Enterprise
+- Detección de inyecciones (30+ patrones)
+- PII masking automático
+- Auditoría ACID (SQLite)
+- Rate limiting
+
+### 🧠 Patrones Avanzados
+- **ReAct:** Razonamiento explícito
+- **Reflection:** Auto-evaluación
+- **Planning:** Descomposición de queries
+- **HITL:** Aprobación humana
+
+---
+
+## 🎓 NAVEGACIÓN POR TIPO DE NECESIDAD
+
+| Necesidad | Archivo |
+|-----------|---------|
+| Presentar al profesor | `docs/presentacion/presentacion.html` |
+| Qué decir en cada slide | `docs/presentacion/COMO_USAR_PRESENTACION.md` |
+| Explicar arquitectura | `docs/arquitectura/ARQUITECTURA_VISUAL.md` |
+| LangGraph vs LangChain? | `docs/arquitectura/LANGGRAPH_VS_LANGCHAIN_EXPLICADO.md` |
+| Explicar sin tecnicismos | `docs/guias/PROYECTO_EXPLICADO_SIMPLE.md` |
+| Análisis técnico profundo | `docs/guias/TECHNICAL_REPORT.md` |
+| Por qué cada decisión | `docs/guias/POR_QUE_CADA_COSA.md` |
+| Cómo funcionan los MCPs | `docs/guias/MCPs_TECHNICAL_GUIDE.md` |
+| Diccionario de términos | `docs/referencia/GLOSARIO_TERMINOS.md` |
+| Demo de los 4 patrones | `docs/referencia/PHASE_6_DEMO.md` |
+
+---
+
+## 📊 3 Herramientas Disponibles
+
+```python
+# Tool 1: Influencia
+get_influence_metrics()
+→ Retorna: JSON ranking de usuarios más influyentes
+
+# Tool 2: Sentimiento
+analyze_sentiment()
+→ Retorna: POSITIVE/NEGATIVE/NEUTRAL percentage
+
+# Tool 3: Propagación
+trace_propagation(post_id)
+→ Retorna: Árbol de retweets con BFS
+```
+
+---
+
+## 💻 Tech Stack
+
+```
+Orquestación:     LangGraph (decisiones dinámicas)
+API Web:          FastAPI (3 MCPs independientes)
+Análisis datos:   Pandas (groupby, aggregation)
+Búsqueda:         ChromaDB (semantic) + SQLite
+LLM:              OpenAI (GPT-4o-mini) o Ollama (local, gratis)
+Dashboard:        Streamlit (4 KPIs + 4 gráficos)
+Seguridad:        Regex + Custom detectors
+Evaluación:       Ragas (quality metrics)
+```
+
+---
+
+## 🎬 PRESENTACIÓN
+
+### Antes de Presentar
+```
+✅ Lee: docs/presentacion/COMO_USAR_PRESENTACION.md
+✅ Abre: docs/presentacion/presentacion.html
+✅ Practica una vez
+```
+
+### Durante la Presentación
+```
+1. Diapositivas 1-7: Intro (5 min)
+2. Diapositivas 8-12: Patrones (10 min)
+3. Diapositivas 13-16: Seguridad/Infraestructura (5 min)
+4. Diapositiva 17: Demo en vivo (5 min)
+5. Diapositiva 18-19: Diferenciador + Conclusión (1 min)
+```
+
+### Si el profesor pregunta
+```
+"¿LangGraph por qué?" → docs/arquitectura/LANGGRAPH_VS_LANGCHAIN_EXPLICADO.md
+"¿MCPs cómo?" → docs/guias/MCPs_TECHNICAL_GUIDE.md
+"¿Por qué FastAPI?" → docs/guias/POR_QUE_CADA_COSA.md
+"¿Términos?" → docs/referencia/GLOSARIO_TERMINOS.md
+```
+
+---
+
+## 📝 DOCUMENTACIÓN COMPLETADA
+
+- ✅ Presentación interactiva (20 slides)
+- ✅ Guía de arquitectura con diagramas
+- ✅ Glosario de términos (738 líneas)
+- ✅ Reportes técnicos
+- ✅ Guías de uso y demo
+- ✅ Justificación de decisiones
+
+---
+
+## ✅ ESTADO DEL PROYECTO
+
+- ✅ Código completo (6 fases)
+- ✅ Presentación profesional
+- ✅ Documentación organizada
+- ✅ Diferenciador claro (Dashboard)
+- ✅ **LISTO PARA PRESENTAR**
+
+---
+
+**Para más detalles, navega por la carpeta `docs/` según tu necesidad.**
+
+*Última actualización: 2026-05-04*

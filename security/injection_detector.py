@@ -11,8 +11,8 @@ from typing import Tuple
 # ==============================================================================
 
 INJECTION_KEYWORDS = {
-    # Ignorar instrucciones previas
-    "ignore": ["ignore previous", "olvida lo anterior", "ignora las instrucciones"],
+    # Ignorar instrucciones (más genérico)
+    "ignore": ["ignore all", "ignore previous", "olvida lo anterior", "ignora las instrucciones", "olvida"],
     "override": ["override", "bypass", "no hagas caso", "no sigas"],
 
     # Acceso a system prompt
@@ -36,7 +36,7 @@ INJECTION_KEYWORDS = {
 
 INJECTION_PATTERNS = [
     # Common prompt injection patterns
-    r"ignore.*previous|previous.*ignore",
+    r"\bignore\b",  # Palabra "ignore" aislada
     r"forget.*instruction|instruction.*forget",
     r"you.*are.*actually|actually.*you.*are",
     r"let's.*pretend|pretend.*we",

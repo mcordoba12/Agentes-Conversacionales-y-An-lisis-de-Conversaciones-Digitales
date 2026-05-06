@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from agent.graph import ConversationalAgent
 from shared import get_loader
+from security.injection_detector import detect_prompt_injection, get_injection_severity
 import config
 
 # ==============================================================================
@@ -112,6 +113,25 @@ async def chat(request: ChatRequest):
 
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="La pregunta no puede estar vacía")
+
+    # =====================================================================
+    # SEGURIDAD: Bloquear inyecciones en el nivel del servicio
+    # =====================================================================
+    has_injection = detect_prompt_injection(request.question)
+    injection_severity = get_injection_severity(request.question) if has_injection else "SAFE"
+
+    if has_injection:
+        blocked_msg = f"🔒 Security: Suspicious input detected and blocked [{injection_severity}]. Please rephrase your question."
+        print(f"[SECURITY] Injection blocked: {injection_severity} - '{request.question[:50]}...'")
+
+        return ChatResponse(
+            response=blocked_msg,
+            session_id=agent.session_id if agent else "unknown",
+            tokens={"input": 0, "output": 0, "total": 0},
+            cost=0.0,
+            latency_ms=0.0,
+            success=True  # Responde OK pero con mensaje de bloqueo
+        )
 
     try:
         # Ejecutar chat

@@ -108,6 +108,8 @@ async def chat(request: ChatRequest):
     Returns:
         ChatResponse con la respuesta del agente y métricas
     """
+    print(f"\n[API] /chat request: '{request.question[:60]}...'")
+
     if not agent:
         raise HTTPException(status_code=503, detail="Agente no inicializado")
 
@@ -117,11 +119,14 @@ async def chat(request: ChatRequest):
     # =====================================================================
     # SEGURIDAD: Bloquear inyecciones en el nivel del servicio
     # =====================================================================
+    print(f"[SECURITY] Checking injection...")
     has_injection = detect_prompt_injection(request.question)
     injection_severity = get_injection_severity(request.question) if has_injection else "SAFE"
+    print(f"[SECURITY] Result: has_injection={has_injection}, severity={injection_severity}")
 
     if has_injection:
         blocked_msg = f"🔒 Security: Suspicious input detected and blocked [{injection_severity}]. Please rephrase your question."
+        print(f"[SECURITY] ✓ BLOCKING injection attempt!")
         print(f"[SECURITY] Injection blocked: {injection_severity} - '{request.question[:50]}...'")
 
         return ChatResponse(
@@ -130,7 +135,7 @@ async def chat(request: ChatRequest):
             tokens={"input": 0, "output": 0, "total": 0},
             cost=0.0,
             latency_ms=0.0,
-            success=True  # Responde OK pero con mensaje de bloqueo
+            success=True
         )
 
     try:

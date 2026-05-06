@@ -228,9 +228,21 @@ with chat_col:
                 "content": user_input
             })
 
-            # Enviar al agente
-            with st.spinner("Thinking..."):
-                response_data = send_message_to_agent(user_input)
+            # Mostrar mensaje sin gris (placeholder en lugar de spinner)
+            chat_container.empty()
+            for msg in st.session_state.chat_messages:
+                if msg["role"] == "user":
+                    chat_container.write(f"**You:** {msg['content']}")
+
+            # Placeholder de pensamiento sin overlay gris
+            thinking_placeholder = chat_container.empty()
+            thinking_placeholder.write("🤔 *Thinking...*")
+
+            # Enviar al agente (sin spinner overlay)
+            response_data = send_message_to_agent(user_input)
+
+            # Limpiar placeholder
+            thinking_placeholder.empty()
 
             if response_data.get("success"):
                 # Agregar respuesta del agente
@@ -251,15 +263,19 @@ with chat_col:
         st.chat_input("Ask something...", disabled=True)
         st.info("Connect agent service to enable chat")
 
-    # Controles
+    # Controles (sin duplicados)
     st.divider()
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        if st.button("Clear Chat", use_container_width=True):
+    st.markdown("#### ⚙️ Controls")
+
+    btn_col1, btn_col2 = st.columns([1, 1])
+
+    with btn_col1:
+        if st.button("🗑️ Clear", use_container_width=True, help="Clear chat history"):
             st.session_state.chat_messages = []
             st.rerun()
-    with col_btn2:
-        if st.button("Reset Agent", use_container_width=True):
+
+    with btn_col2:
+        if st.button("🔄 Reset", use_container_width=True, help="Reset agent session"):
             try:
                 requests.post(f"{AGENT_SERVICE_URL}/reset", timeout=5)
                 st.session_state.chat_messages = []

@@ -122,34 +122,52 @@ docs/referencia/PHASE_6_DEMO.md
 
 ## ⚡ QUICK START
 
-### Terminal 1: Arrancar MCPs
+### 🆕 Chat Dashboard (Recomendado - Mejor para Demostración)
 ```bash
+# Terminal 1: Arrancar MCPs
 python -m services.sentiment_mcp.main
 python -m services.influence_mcp.main
 python -m services.propagation_mcp.main
-```
 
-### Terminal 2: Arrancar CLI
-```bash
-python cli.py
-```
+# Terminal 2: Arrancar Agent Service
+python agent_service.py
 
-### Terminal 3 (Opcional): Dashboard
-```bash
+# Terminal 3: Arrancar Dashboard (CON CHAT INTEGRADO)
 streamlit run dashboard/app.py
 ```
 
-### Ejemplo de uso:
+**Luego**: Abre navegador → `http://localhost:8501` → ¡Chatea directamente!
+
+### CLI Tradicional (sigue funcionando)
 ```bash
-You: ¿Quiénes son los más influyentes?
-Agent: [Respuesta basada en datos]
+# Terminal 1: MCPs (igual)
+python -m services.sentiment_mcp.main
+python -m services.influence_mcp.main
+python -m services.propagation_mcp.main
 
-You: mode react
-You: ¿Cuál es el sentimiento?
-Agent: [Muestra Thought → Action → Reflection]
+# Terminal 2: Agente CLI
+python cli.py
 
-You: mode hitl
-Agent: [Pide confirmación antes de ejecutar]
+# Terminal 3 (opcional): Dashboard
+streamlit run dashboard/app.py
+```
+
+### Script Rápido (macOS/Linux)
+```bash
+bash run_demo.sh
+# Inicia todo automáticamente
+```
+
+### Ejemplo de uso (Dashboard Chat):
+```
+Chat Box: ¿Quiénes son los más influyentes?
+Agent: [Respuesta en tiempo real en el dashboard]
+
+[Métricas se actualizan automáticamente]
+- Total Queries: 1
+- Avg Latency: 2143 ms
+- Session Cost: $0.0004
+- Quality Score: 0.82
 ```
 
 ---
@@ -164,12 +182,13 @@ Agent: [Pide confirmación antes de ejecutar]
 - Fase 5: LLM Factory (OpenAI/Ollama)
 - Fase 6: Design Patterns (ReAct, Reflection, Planning, HITL)
 
-### 🏆 Diferenciador: Dashboard Profesional
-- 4 KPIs en tiempo real
-- 4 gráficos interactivos
-- Tabla de auditoría con seguridad visible
-- Cost tracking
-- Quality metrics
+### 🏆 Diferenciador: Dashboard Profesional con Chat Integrado
+- **💬 Chat Interface**: Chatea directamente sin terminal
+- **4 KPIs en tiempo real**: Queries, latencia, costo, calidad
+- **4 gráficos interactivos**: Latencia, tokens, herramientas, calidad
+- **Tabla de auditoría**: Eventos de seguridad con color-coding
+- **Cost tracking**: Análisis de costos OpenAI en vivo
+- **Quality metrics**: Ragas evaluation scores
 
 ### 🔒 Seguridad Enterprise
 - Detección de inyecciones (30+ patrones)

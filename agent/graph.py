@@ -235,9 +235,9 @@ def node_process_input(state: AgentStateDict) -> AgentStateDict:
     has_injection = detect_prompt_injection(last_user_message)
     injection_severity = get_injection_severity(last_user_message) if has_injection else "SAFE"
 
-    # Si hay inyección de severidad alta, bloquear
-    if injection_severity == "HIGH":
-        error_msg = "Security: Suspicious input detected and blocked. Please rephrase your question."
+    # Si hay cualquier inyección detectada, bloquear (LOW, MEDIUM, HIGH)
+    if has_injection:
+        error_msg = f"🔒 Security: Suspicious input detected and blocked [{injection_severity}]. Please rephrase your question."
         state["messages"].append(AIMessage(content=error_msg))
         state["security_block"] = True
         return state

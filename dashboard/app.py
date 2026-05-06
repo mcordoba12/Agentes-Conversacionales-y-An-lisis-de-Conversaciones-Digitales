@@ -228,24 +228,17 @@ with chat_col:
                 "content": user_input
             })
 
-            # Mostrar mensaje sin gris (placeholder en lugar de spinner)
-            chat_container.empty()
-            for msg in st.session_state.chat_messages:
-                if msg["role"] == "user":
-                    chat_container.write(f"**You:** {msg['content']}")
-
-            # Placeholder de pensamiento sin overlay gris
-            thinking_placeholder = chat_container.empty()
-            thinking_placeholder.write("🤔 *Thinking...*")
+            # Mostrar indicador de pensamiento sin overlay gris
+            with chat_container:
+                st.write(f"**You:** {user_input}")
+                thinking_msg = st.empty()
+                thinking_msg.write("🤔 *Thinking...*")
 
             # Enviar al agente (sin spinner overlay)
             response_data = send_message_to_agent(user_input)
 
-            # Limpiar placeholder
-            thinking_placeholder.empty()
-
             if response_data.get("success"):
-                # Agregar respuesta del agente
+                # Agregar respuesta del agente al historial
                 st.session_state.chat_messages.append({
                     "role": "agent",
                     "content": response_data.get("response", "No response"),
@@ -256,8 +249,10 @@ with chat_col:
                         "tokens": response_data.get("tokens", {})
                     }
                 })
+                # Rerun para que se dibuje automáticamente sin duplicar
                 st.rerun()
             else:
+                thinking_msg.empty()
                 st.error(f"Error: {response_data.get('error', 'Unknown error')}")
     else:
         st.chat_input("Ask something...", disabled=True)

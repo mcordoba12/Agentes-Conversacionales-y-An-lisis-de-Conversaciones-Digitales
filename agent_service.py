@@ -17,7 +17,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 from agent.graph import ConversationalAgent
 from shared import get_loader
 from security.injection_detector import detect_prompt_injection, get_injection_severity
+from security.audit_logger import AuditLogger
 import config
+import uuid
+from datetime import datetime
 
 # ==============================================================================
 # MODELOS
@@ -52,6 +55,7 @@ app = FastAPI(
 
 # Estado global
 agent: ConversationalAgent = None
+audit_logger: AuditLogger = None
 
 
 # ==============================================================================
@@ -61,7 +65,7 @@ agent: ConversationalAgent = None
 @app.on_event("startup")
 async def startup():
     """Inicializar agente al arrancar el servicio"""
-    global agent
+    global agent, audit_logger
 
     print("[Service] Inicializando agente...")
 
@@ -77,10 +81,17 @@ async def startup():
     try:
         # Crear agente
         agent = ConversationalAgent()
-        print(f"  [OK] Agente listo\n")
+        print(f"  [OK] Agente listo")
     except Exception as e:
         print(f"  [ERROR] No se pudo inicializar agente: {e}")
         raise
+
+    try:
+        # Inicializar audit logger
+        audit_logger = AuditLogger()
+        print(f"  [OK] Audit logger listo\n")
+    except Exception as e:
+        print(f"  [WARNING] Audit logger no disponible: {e}\n")
 
 
 # ==============================================================================
@@ -128,6 +139,22 @@ async def chat(request: ChatRequest):
         blocked_msg = f"🔒 Security: Suspicious input detected and blocked [{injection_severity}]. Please rephrase your question."
         print(f"[SECURITY] ✓ BLOCKING injection attempt!")
         print(f"[SECURITY] Injection blocked: {injection_severity} - '{request.question[:50]}...'")
+
+        # Registrar en audit log
+        try:
+            if audit_logger:
+                session_id = agent.session_id if agent else str(uuid.uuid4())
+                audit_logger.log(
+                    query=request.question,
+                    session_id=session_id,
+                    has_injection=True,
+                    injection_severity=injection_severity,
+                    pii_detected=False,
+                    tool_called=None
+                )
+                print(f"[AUDIT] Logged injection attempt to database")
+        except Exception as e:
+            print(f"[WARNING] Could not log to audit: {e}")
 
         return ChatResponse(
             response=blocked_msg,

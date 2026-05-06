@@ -73,7 +73,6 @@ IA-RETO/
 
 ## 🎯 ¿POR DÓNDE EMPEZAR?
 
-### Para Presentar al Profesor 🎬
 ```bash
 # 1. Abre la presentación
 docs/presentacion/presentacion.html
@@ -95,7 +94,6 @@ docs/arquitectura/ARQUITECTURA_VISUAL.md
 docs/arquitectura/LANGGRAPH_VS_LANGCHAIN_EXPLICADO.md
 ```
 
-### Para Responder Preguntas del Profesor 🤔
 ```bash
 # Sin tecnicismos
 docs/guias/PROYECTO_EXPLICADO_SIMPLE.md

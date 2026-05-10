@@ -193,13 +193,27 @@ def detect_metrics_intent(message: str) -> bool:
 
 
 # ==============================================================================
-# INICIALIZAR LLM CON TOOLS (Native Tool Calling + Phase 5 Factory)
+# LAZY LOADING: LLM se crea cuando se necesita (no al importar)
 # ==============================================================================
 
-llm = create_llm()
+_llm = None
+_llm_with_tools = None
 
-# Bind tools natively (no más regex parsing)
-llm_with_tools = llm.bind_tools(TOOLS)
+def get_llm():
+    """Lazy load LLM base - se crea solo una vez cuando se necesita"""
+    global _llm
+    if _llm is None:
+        _llm = create_llm()
+    return _llm
+
+def get_llm_with_tools():
+    """Lazy load LLM con tools - se crea solo una vez cuando se necesita"""
+    global _llm, _llm_with_tools
+    if _llm is None:
+        _llm = create_llm()
+    if _llm_with_tools is None:
+        _llm_with_tools = _llm.bind_tools(TOOLS)
+    return _llm_with_tools
 
 
 # ==============================================================================
@@ -321,7 +335,7 @@ def node_route_to_tool(state: AgentStateDict) -> AgentStateDict:
 
     try:
         # Llamar al LLM CON tools nativas (NO más TOOL_CALL regex)
-        response = llm_with_tools.invoke(
+        response = get_llm_with_tools().invoke(
             messages[-4:] if len(messages) > 4 else messages,
             system_message=system_prompt
         )
@@ -458,7 +472,7 @@ def node_generate_response(state: AgentStateDict) -> AgentStateDict:
     system_prompt = get_generate_system_prompt(context, long_term_context=long_term_context)
 
     try:
-        response = llm.invoke([
+        response = get_llm().invoke([
             {"role": "system", "content": system_prompt},
             *[{"role": msg.type, "content": msg.content} for msg in messages[-3:]]
         ])
@@ -512,7 +526,7 @@ def node_react_think(state: AgentStateDict) -> AgentStateDict:
     system_prompt = get_react_system_prompt()
 
     try:
-        response = llm.invoke([
+        response = get_llm().invoke([
             {"role": "system", "content": system_prompt},
             *[{"role": msg.type, "content": msg.content} for msg in messages[-3:]]
         ])
@@ -565,7 +579,7 @@ def node_reflect(state: AgentStateDict) -> AgentStateDict:
     system_prompt = get_reflection_system_prompt()
 
     try:
-        response = llm.invoke([
+        response = get_llm().invoke([
             {"role": "system", "content": system_prompt},
             *[{"role": msg.type, "content": msg.content} for msg in messages[-3:]],
             {"role": "user", "content": f"User question context: {context}"}
@@ -597,7 +611,7 @@ def node_plan(state: AgentStateDict) -> AgentStateDict:
     system_prompt = get_planning_system_prompt()
 
     try:
-        response = llm.invoke([
+        response = get_llm().invoke([
             {"role": "system", "content": system_prompt},
             *[{"role": msg.type, "content": msg.content} for msg in messages[-2:]]
         ])

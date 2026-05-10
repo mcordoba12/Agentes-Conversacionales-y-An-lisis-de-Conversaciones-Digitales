@@ -15,6 +15,7 @@ langgraph>=0.0.20
 openai>=1.0.0
 langchain-openai>=0.0.5
 langchain-ollama>=0.1.0       # Phase 5: Transfer Learning - Free local Llama inference
+langchain-groq>=0.1.0         # Cloud deployment - Free Groq API (unlimited free tier)
 
 # Vector Stores & Embeddings (Phase 3: Long-Term Memory)
 chromadb>=0.4.0

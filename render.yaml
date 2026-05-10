@@ -1,0 +1,60 @@
+services:
+  # ========================================================================
+  # 1. IA RETO AGENT API (Main service)
+  # ========================================================================
+  - type: web
+    name: ia-reto-agent
+    runtime: python311
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python app.py"
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: LLM_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        fromSecret: GROQ_API_KEY
+    disk:
+      name: data
+      mountPath: /opt/render/project/data
+      sizeGB: 1
+
+  # ========================================================================
+  # 2. SENTIMENT MCP (Microservice 1)
+  # ========================================================================
+  - type: web
+    name: sentiment-mcp
+    runtime: python311
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python -m services.sentiment_mcp.main"
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 8001
+
+  # ========================================================================
+  # 3. INFLUENCE METRICS MCP (Microservice 2)
+  # ========================================================================
+  - type: web
+    name: influence-mcp
+    runtime: python311
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python -m services.influence_mcp.main"
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 8002
+
+  # ========================================================================
+  # 4. PROPAGATION MCP (Microservice 3)
+  # ========================================================================
+  - type: web
+    name: propagation-mcp
+    runtime: python311
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python -m services.propagation_mcp.main"
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 8003

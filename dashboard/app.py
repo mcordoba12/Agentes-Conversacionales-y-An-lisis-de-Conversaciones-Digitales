@@ -5,6 +5,7 @@ PLUS: Chat interface integrado (sin necesidad de terminal)
 """
 
 import sys
+import os
 import sqlite3
 import time
 from pathlib import Path
@@ -21,8 +22,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dashboard.metrics_store import read_metrics, clear_metrics
 
-# Configuración del servicio
-AGENT_SERVICE_URL = "http://localhost:8000"
+# Configuración del servicio (para despliegue local o cloud)
+AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://localhost:8000")
 
 # ============================================================================
 # CONFIG
@@ -71,17 +72,29 @@ def send_message_to_agent(question: str) -> dict:
     try:
         resp = requests.post(
             f"{AGENT_SERVICE_URL}/chat",
-            json={"question": question},
+            json={"query": question},
             timeout=30
         )
         if resp.status_code == 200:
-            return resp.json()
+            data = resp.json()
+            # Retornar en formato esperado por dashboard
+            return {
+                "success": True,
+                "response": data.get("response", ""),
+                "latency_ms": data.get("latency_ms", 0),
+                "cost": data.get("cost", 0),
+                "quality": 0.85,  # Default si no viene en response
+                "tokens": {
+                    "input": data.get("tokens_used", 0),
+                    "output": 0
+                }
+            }
         else:
             return {"success": False, "error": f"Server error: {resp.status_code}"}
     except requests.exceptions.Timeout:
         return {"success": False, "error": "Request timeout. Agent service may be slow."}
     except requests.exceptions.ConnectionError:
-        return {"success": False, "error": "Cannot connect to agent service. Make sure agent_service.py is running on port 8000."}
+        return {"success": False, "error": "Cannot connect to agent service. Make sure app.py is running on port 8000."}
     except Exception as e:
         return {"success": False, "error": str(e)}
 

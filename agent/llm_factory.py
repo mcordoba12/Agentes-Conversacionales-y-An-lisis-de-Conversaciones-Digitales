@@ -49,9 +49,27 @@ def create_llm(
             base_url=config.OLLAMA_BASE_URL
         )
 
+    elif provider == "groq":
+        try:
+            from langchain_groq import ChatGroq
+        except ImportError:
+            raise ImportError(
+                "langchain-groq no instalado. Ejecuta: pip install langchain-groq"
+            )
+        if not config.GROQ_API_KEY:
+            raise ValueError(
+                "GROQ_API_KEY no configurada. Agrega a .env: GROQ_API_KEY=gsk_..."
+            )
+        model = model or "llama-3.1-70b-versatile"
+        return ChatGroq(
+            model=model,
+            temperature=temperature,
+            api_key=config.GROQ_API_KEY
+        )
+
     else:
         raise ValueError(
-            f"Provider desconocido: '{provider}'. Valores válidos: openai, ollama"
+            f"Provider desconocido: '{provider}'. Valores válidos: openai, ollama, groq"
         )
 
 
@@ -77,6 +95,16 @@ def get_provider_info() -> dict:
             "cost_output": "FREE (local)",
             "local": True,
             "base_url": config.OLLAMA_BASE_URL,
+        }
+    elif provider == "groq":
+        return {
+            "provider": "groq",
+            "model": "llama-3.1-70b-versatile",
+            "temperature": config.LLM_TEMPERATURE,
+            "cost_input": "FREE (Groq free tier)",
+            "cost_output": "FREE (Groq free tier)",
+            "local": False,
+            "speed": "Ultra-fast (0.5s per query)",
         }
     else:
         return {

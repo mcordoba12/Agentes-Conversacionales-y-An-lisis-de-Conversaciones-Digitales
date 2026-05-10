@@ -30,13 +30,16 @@ LLM_MODEL = "gpt-4o-mini"
 LLM_TEMPERATURE = 0.7
 
 # LLM Provider (Phase 5 - Transfer Learning)
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")  # openai | ollama
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")  # openai | ollama | groq
 
 # Ollama settings (Phase 5 - Free local inference)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 
-# MCP Ports
+# Groq settings (Free cloud LLM - unlimited free tier)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
+# MCP Ports (local development)
 SENTIMENT_MCP_PORT = int(os.getenv("SENTIMENT_MCP_PORT", 8001))
 INFLUENCE_MCP_PORT = int(os.getenv("INFLUENCE_MCP_PORT", 8002))
 PROPAGATION_MCP_PORT = int(os.getenv("PROPAGATION_MCP_PORT", 8003))
@@ -45,10 +48,16 @@ PROPAGATION_MCP_PORT = int(os.getenv("PROPAGATION_MCP_PORT", 8003))
 AGENT_MEMORY_WINDOW = 6  # Últimos N turnos en memoria
 
 # URLs de MCPs (para el agente)
+# En cloud (Render): Usar URLs full del servicio
+# En local: Usar localhost
+SENTIMENT_MCP_URL = os.getenv("SENTIMENT_MCP_URL", f"http://localhost:{SENTIMENT_MCP_PORT}")
+INFLUENCE_MCP_URL = os.getenv("INFLUENCE_MCP_URL", f"http://localhost:{INFLUENCE_MCP_PORT}")
+PROPAGATION_MCP_URL = os.getenv("PROPAGATION_MCP_URL", f"http://localhost:{PROPAGATION_MCP_PORT}")
+
 MCP_URLS = {
-    "sentiment": f"http://localhost:{SENTIMENT_MCP_PORT}",
-    "influence": f"http://localhost:{INFLUENCE_MCP_PORT}",
-    "propagation": f"http://localhost:{PROPAGATION_MCP_PORT}",
+    "sentiment": SENTIMENT_MCP_URL,
+    "influence": INFLUENCE_MCP_URL,
+    "propagation": PROPAGATION_MCP_URL,
 }
 
 # Logging

@@ -20,8 +20,10 @@ DATA_PATH = os.getenv("DATA_PATH", str(DATA_DIR / "Reto_data_20251023_122206.par
 # OpenAI (opcional si usas Groq)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-# Validar que hay al menos un LLM configurado
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
+# LLM Provider (Groq es default: gratis, rápido, sin dependencias)
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")
+
+# Validar que hay un LLM configurado si no es Groq
 if LLM_PROVIDER == "openai" and not OPENAI_API_KEY:
     raise ValueError(
         "OPENAI_API_KEY no está configurada y LLM_PROVIDER=openai. "

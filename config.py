@@ -17,20 +17,20 @@ DOCS_DIR = PROJECT_ROOT / "docs"
 # Dataset
 DATA_PATH = os.getenv("DATA_PATH", str(DATA_DIR / "Reto_data_20251023_122206.parquet"))
 
-# OpenAI
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
+# OpenAI (opcional si usas Groq)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+# Validar que hay al menos un LLM configurado
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
+if LLM_PROVIDER == "openai" and not OPENAI_API_KEY:
     raise ValueError(
-        "OPENAI_API_KEY no está configurada. "
-        "Copia .env.example a .env y agrega tu clave de API."
+        "OPENAI_API_KEY no está configurada y LLM_PROVIDER=openai. "
+        "Configura OPENAI_API_KEY o cambia a LLM_PROVIDER=groq"
     )
 
 # Model
 LLM_MODEL = "gpt-4o-mini"
 LLM_TEMPERATURE = 0.7
-
-# LLM Provider (Phase 5 - Transfer Learning)
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")  # openai | ollama | groq
 
 # Ollama settings (Phase 5 - Free local inference)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")

@@ -1088,9 +1088,35 @@ class ConversationalAgent:
                     # Nunca crashear el agente por culpa de métricas del dashboard
                     pass
 
-                return response_text
+                # Preparar metadatos para retornar
+                metadata = {
+                    "query_id": query_id or "unknown",
+                    "total_tokens": self.last_query_tokens.get("total", 0),
+                    "input_tokens": self.last_query_tokens.get("input", 0),
+                    "output_tokens": self.last_query_tokens.get("output", 0),
+                    "total_cost": self.cost_tracker.get_query_cost(
+                        self.last_query_tokens.get("input", 0),
+                        self.last_query_tokens.get("output", 0)
+                    ) if self.cost_tracker else 0.0,
+                    "latency_ms": _latency if 'self' in dir() else 0,
+                    "tool_used": tool_called or "none",
+                    "answer_relevancy": self.last_eval_result.answer_relevancy if self.last_eval_result else None,
+                    "faithfulness": self.last_eval_result.faithfulness if self.last_eval_result else None,
+                }
 
-        return "No response generated"
+                return response_text, metadata
+
+        return "No response generated", {
+            "query_id": "unknown",
+            "total_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_cost": 0.0,
+            "latency_ms": 0,
+            "tool_used": "none",
+            "answer_relevancy": None,
+            "faithfulness": None,
+        }
 
     def reset(self):
         """Resetear la conversación"""

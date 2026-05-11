@@ -249,6 +249,25 @@ async def set_pattern(pattern_name: str):
     return {"status": "ok", "pattern": pattern_name}
 
 
+@app.get("/metrics")
+async def get_metrics():
+    """Obtener métricas del agente para dashboard"""
+    if not agent:
+        return {
+            "status": "not_initialized",
+            "metrics": {}
+        }
+
+    return {
+        "status": "ok",
+        "session_id": agent.session_id,
+        "last_query_tokens": agent.last_query_tokens if hasattr(agent, 'last_query_tokens') else {"input": 0, "output": 0, "total": 0},
+        "last_query_latency": agent.last_query_latency if hasattr(agent, 'last_query_latency') else 0.0,
+        "memory_size": len(agent.state.get("messages", [])) if hasattr(agent, 'state') else 0,
+        "total_cost": agent.cost_tracker.session_cost if hasattr(agent, 'cost_tracker') and agent.cost_tracker else 0.0,
+    }
+
+
 # ==============================================================================
 # MAIN
 # ==============================================================================

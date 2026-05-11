@@ -431,7 +431,12 @@ def node_generate_response(state: AgentStateDict) -> AgentStateDict:
     context = ""
     if tool_result and "error" not in tool_result:
         tool_name = tool_result.get("tool_name")
-        result_data = tool_result.get("result", {})
+        # Tool result puede estar directamente o envuelto en "result"
+        if "result" in tool_result:
+            result_data = tool_result.get("result", {})
+        else:
+            # Si no hay "result" key, asumir que todo el dict ES el resultado
+            result_data = {k: v for k, v in tool_result.items() if k not in ["tool_name", "input", "is_tool_call"]}
 
         # Procesar resultado según el tipo de tool
         if tool_name == "get_influence_metrics":

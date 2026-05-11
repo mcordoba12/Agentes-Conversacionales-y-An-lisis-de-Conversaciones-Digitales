@@ -1035,8 +1035,10 @@ class ConversationalAgent:
             if self.rate_limiter:
                 self.rate_limiter.record(self.user_id, is_injection=has_injection)
 
+        # Obtener tool llamada (ANTES de usarla en audit log)
+        tool_called = output.get("last_tool_result", {}).get("tool_name") if output.get("last_tool_result") else None
+
         # Obtener última respuesta del asistente
-        tool_called = None
         _latency = 0.0  # Para dashboard (scoping)
         for msg in reversed(output["messages"]):
             if isinstance(msg, AIMessage):
@@ -1078,8 +1080,6 @@ class ConversationalAgent:
                 if self.tracer and query_id:
                     # Obtener tokens de la última query
                     last_tokens = self.last_query_tokens if self.cost_tracker else {"input": 0, "output": 0}
-                    # Obtener tool llamada
-                    tool_called = output.get("last_tool_result", {}).get("tool_name") if output.get("last_tool_result") else None
                     # Finalizar traza y obtener latencia
                     _latency = self.tracer.end_query(
                         query_id=query_id,

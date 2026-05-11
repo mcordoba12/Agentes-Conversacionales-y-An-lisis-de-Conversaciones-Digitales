@@ -901,7 +901,9 @@ class ConversationalAgent:
         # ===========================================================================
 
         if self.rate_limiter:
-            allowed, reason = self.rate_limiter.is_allowed(self.user_id)
+            result = self.rate_limiter.is_allowed(self.user_id)
+            allowed = result[0] if isinstance(result, (tuple, list)) else result
+            reason = result[1] if isinstance(result, (tuple, list)) and len(result) > 1 else "Rate limited"
             if not allowed:
                 error_msg = f"Access denied: {reason}"
                 return error_msg, {

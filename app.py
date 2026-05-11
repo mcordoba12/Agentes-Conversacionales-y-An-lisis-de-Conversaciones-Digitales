@@ -1,6 +1,7 @@
 """
 FastAPI Web App for IA RETO Agent
-Expone endpoints REST para despliegue cloud (Render, Railway, etc)
+Expone endpoints REST para despliegue cloud (Render, Railway, etc.)
+Requiere: langchain-groq para Groq LLM support
 """
 
 import os

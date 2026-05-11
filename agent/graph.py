@@ -368,6 +368,9 @@ def node_route_to_tool(state: AgentStateDict) -> AgentStateDict:
             import re
             response_text = response.content
 
+            # DEBUG: Ver qué respondió el modelo
+            print(f"[DEBUG] Router response: {response_text[:200]}...")
+
             # Buscar patrón TOOL_CALL: {...}
             tool_call_match = re.search(r'TOOL_CALL:\s*(\{[^}]+\})', response_text)
             if tool_call_match:

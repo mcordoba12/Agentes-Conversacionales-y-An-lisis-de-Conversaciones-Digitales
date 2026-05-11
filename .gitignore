@@ -37,7 +37,7 @@ wheels/
 
 # Data
 *.parquet
-!Reto_data_20251023_122206.parquet
+!data/Reto_data_20251023_122206.parquet
 *.csv
 *.xlsx
 

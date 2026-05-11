@@ -28,7 +28,7 @@ from datetime import datetime
 
 class ChatRequest(BaseModel):
     """Solicitud de chat"""
-    question: str
+    query: str
     session_id: str = None
 
 
@@ -119,20 +119,20 @@ async def chat(request: ChatRequest):
     Returns:
         ChatResponse con la respuesta del agente y métricas
     """
-    print(f"\n[API] /chat request: '{request.question[:60]}...'")
+    print(f"\n[API] /chat request: '{request.query[:60]}...'")
 
     if not agent:
         raise HTTPException(status_code=503, detail="Agente no inicializado")
 
-    if not request.question.strip():
+    if not request.query.strip():
         raise HTTPException(status_code=400, detail="La pregunta no puede estar vacía")
 
     # =====================================================================
     # SEGURIDAD: Bloquear inyecciones en el nivel del servicio
     # =====================================================================
     print(f"[SECURITY] Checking injection...")
-    has_injection = detect_prompt_injection(request.question)
-    injection_severity = get_injection_severity(request.question) if has_injection else "SAFE"
+    has_injection = detect_prompt_injection(request.query)
+    injection_severity = get_injection_severity(request.query) if has_injection else "SAFE"
     print(f"[SECURITY] Result: has_injection={has_injection}, severity={injection_severity}")
 
     if has_injection:
@@ -145,7 +145,7 @@ async def chat(request: ChatRequest):
             if audit_logger:
                 session_id = agent.session_id if agent else str(uuid.uuid4())
                 audit_logger.log(
-                    query=request.question,
+                    query=request.query,
                     session_id=session_id,
                     has_injection=True,
                     injection_severity=injection_severity,
@@ -166,19 +166,22 @@ async def chat(request: ChatRequest):
         )
 
     try:
-        # Ejecutar chat
-        response = agent.chat(request.question)
+        # Ejecutar chat (devuelve diccionario)
+        result = agent.chat(request.query)
 
-        # Obtener métricas
-        tokens = agent.last_query_tokens
-        cost = agent.cost_tracker.get_query_cost(tokens["input"], tokens["output"]) if agent.cost_tracker else 0.0
-        latency = agent.last_query_latency if hasattr(agent, 'last_query_latency') else 0.0
+        # Extraer datos del resultado
+        response_text = result.get("response", "Error: No response") if isinstance(result, dict) else str(result)
+        tokens = result.get("total_tokens", 0) if isinstance(result, dict) else 0
+        input_tokens = result.get("input_tokens", 0) if isinstance(result, dict) else 0
+        output_tokens = result.get("output_tokens", 0) if isinstance(result, dict) else 0
+        cost = result.get("total_cost", 0.0) if isinstance(result, dict) else 0.0
+        latency = result.get("latency_ms", 0.0) if isinstance(result, dict) else 0.0
         session_id = agent.session_id
 
         return ChatResponse(
-            response=response,
+            response=response_text,
             session_id=session_id,
-            tokens=tokens,
+            tokens={"input": input_tokens, "output": output_tokens, "total": tokens},
             cost=cost,
             latency_ms=latency,
             success=True

@@ -123,7 +123,7 @@ def load_usernames_from_loader(loader) -> None:
     try:
         if hasattr(loader, "df") and loader.df is not None:
             if "author" in loader.df.columns:
-                KNOWN_USERNAMES = set(loader.df["author"].unique().dropna())
+                KNOWN_USERNAMES = set(loader.df["author"].dropna().unique())
     except Exception as e:
         print(f"Warning: Could not load usernames from dataset: {e}")
 

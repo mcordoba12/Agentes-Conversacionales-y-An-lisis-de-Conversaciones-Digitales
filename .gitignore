@@ -54,8 +54,9 @@ node_modules/
 package-lock.json
 
 # Runtime data
-data/
 chroma_data/
+# Note: data/ is NOT ignored so that data/Reto_data_20251023_122206.parquet gets committed
+# But we ignore other data files with the *.parquet pattern above
 
 .claude
 .env

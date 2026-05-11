@@ -60,7 +60,7 @@ def create_llm(
             raise ValueError(
                 "GROQ_API_KEY no configurada. Agrega a .env: GROQ_API_KEY=gsk_..."
             )
-        model = model or "llama-3.1-70b-versatile"
+        model = model or "llama-3.1-8b-instant"
         return ChatGroq(
             model=model,
             temperature=temperature,
@@ -99,7 +99,7 @@ def get_provider_info() -> dict:
     elif provider == "groq":
         return {
             "provider": "groq",
-            "model": "llama-3.1-70b-versatile",
+            "model": "llama-3.1-8b-instant",
             "temperature": config.LLM_TEMPERATURE,
             "cost_input": "FREE (Groq free tier)",
             "cost_output": "FREE (Groq free tier)",

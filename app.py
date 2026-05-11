@@ -184,6 +184,9 @@ def chat(request: QueryRequest):
         )
 
     except Exception as e:
+        import traceback
+        error_detail = f"{str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+        print(f"[ERROR] Chat endpoint: {error_detail}")
         raise HTTPException(
             status_code=500,
             detail=f"Error procesando query: {str(e)}"

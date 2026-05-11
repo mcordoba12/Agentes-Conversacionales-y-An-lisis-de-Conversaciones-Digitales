@@ -27,7 +27,9 @@ class DataLoader:
 
     def __init__(self, parquet_path: str = None):
         if parquet_path is None:
-            parquet_path = "Reto_data_20251023_122206.parquet"
+            # Usar config.DATA_PATH para obtener la ruta correcta
+            import config
+            parquet_path = config.DATA_PATH
 
         self.parquet_path = Path(parquet_path)
         self.df = None

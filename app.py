@@ -170,16 +170,16 @@ def chat(request: QueryRequest):
         start_time = time.time()
 
         # Llamar al agente
-        response, metadata = agent.chat(request.query)
+        response = agent.chat(request.query)
 
         latency_ms = (time.time() - start_time) * 1000
 
         return QueryResponse(
             response=response,
-            tokens_used=metadata.get("total_tokens", 0),
-            cost=metadata.get("total_cost", 0),
+            tokens_used=0,
+            cost=0.0,
             latency_ms=latency_ms,
-            tool_used=metadata.get("tool_used", "unknown"),
+            tool_used="unknown",
             success=True,
         )
 

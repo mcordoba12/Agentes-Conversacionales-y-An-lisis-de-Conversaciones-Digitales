@@ -319,7 +319,10 @@ def node_route_to_tool(state: AgentStateDict) -> AgentStateDict:
         return state
 
     # Si detecta pregunta de MÉTRICAS/INFLUENCIA, llamar directamente a get_influence_metrics
-    if detect_metrics_intent(last_user_message):
+    metrics_detected = detect_metrics_intent(last_user_message)
+    print(f"[DEBUG] Message: '{last_user_message[:60]}...' | Metrics intent: {metrics_detected}")
+    if metrics_detected:
+        print(f"[DEBUG] ✓ Calling get_influence_metrics")
         state["last_tool_result"] = {
             "tool_name": "get_influence_metrics",
             "input": {},

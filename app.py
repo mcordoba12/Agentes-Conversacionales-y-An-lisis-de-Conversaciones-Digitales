@@ -89,11 +89,15 @@ class HealthResponse(BaseModel):
 # Global Agent Instance
 # ============================================================================
 
+agent_init_error = None
 try:
     agent = ConversationalAgent()
     agent_ready = True
 except Exception as e:
     print(f"⚠️  Error inicializando agente: {e}")
+    import traceback
+    traceback.print_exc()
+    agent_init_error = str(e)
     agent = None
     agent_ready = False
 
@@ -120,17 +124,22 @@ def root():
     }
 
 
-@app.get("/health", response_model=HealthResponse, tags=["health"])
+@app.get("/health", response_model=dict, tags=["health"])
 def health():
     """Health check del API"""
     from agent.llm_factory import get_provider_info
     provider_info = get_provider_info()
 
-    return HealthResponse(
-        status="ready" if agent_ready else "not_ready",
-        provider=provider_info.get("provider", "unknown"),
-        timestamp=datetime.now().isoformat(),
-    )
+    response = {
+        "status": "ready" if agent_ready else "not_ready",
+        "provider": provider_info.get("provider", "unknown"),
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    if agent_init_error:
+        response["error"] = agent_init_error
+
+    return response
 
 
 @app.post("/chat", response_model=QueryResponse, tags=["chat"])

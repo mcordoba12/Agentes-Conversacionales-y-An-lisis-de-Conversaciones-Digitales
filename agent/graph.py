@@ -1101,8 +1101,9 @@ class ConversationalAgent:
                     # Nunca crashear el agente por culpa de métricas del dashboard
                     pass
 
-                # Preparar metadatos para retornar
-                metadata = {
+                # Preparar resultado para retornar (como diccionario)
+                return {
+                    "response": response_text,
                     "query_id": query_id or "unknown",
                     "total_tokens": self.last_query_tokens.get("total", 0),
                     "input_tokens": self.last_query_tokens.get("input", 0),
@@ -1117,9 +1118,8 @@ class ConversationalAgent:
                     "faithfulness": self.last_eval_result.faithfulness if self.last_eval_result else None,
                 }
 
-                return response_text, metadata
-
-        return "No response generated", {
+        return {
+            "response": "No response generated",
             "query_id": "unknown",
             "total_tokens": 0,
             "input_tokens": 0,

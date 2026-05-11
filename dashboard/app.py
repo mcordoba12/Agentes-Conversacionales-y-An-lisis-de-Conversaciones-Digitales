@@ -73,7 +73,7 @@ def send_message_to_agent(question: str) -> dict:
         resp = requests.post(
             f"{AGENT_SERVICE_URL}/chat",
             json={"query": question},
-            timeout=30
+            timeout=60  # Aumentado para Render (latencia de red)
         )
         if resp.status_code == 200:
             data = resp.json()

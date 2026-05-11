@@ -335,8 +335,9 @@ def node_route_to_tool(state: AgentStateDict) -> AgentStateDict:
 
     try:
         # Llamar al LLM CON tools nativas (NO más TOOL_CALL regex)
+        # Aumentar contexto a últimos 8 mensajes para mejor memoria conversacional
         response = get_llm_with_tools().invoke(
-            messages[-4:] if len(messages) > 4 else messages,
+            messages[-8:] if len(messages) > 8 else messages,
             system_message=system_prompt
         )
 
@@ -477,9 +478,10 @@ def node_generate_response(state: AgentStateDict) -> AgentStateDict:
     system_prompt = get_generate_system_prompt(context, long_term_context=long_term_context)
 
     try:
+        # Aumentar contexto a últimos 6 mensajes para mejor memoria en generación de respuesta
         response = get_llm().invoke([
             {"role": "system", "content": system_prompt},
-            *[{"role": msg.type, "content": msg.content} for msg in messages[-3:]]
+            *[{"role": msg.type, "content": msg.content} for msg in messages[-6:]]
         ])
 
         # ===========================================================================

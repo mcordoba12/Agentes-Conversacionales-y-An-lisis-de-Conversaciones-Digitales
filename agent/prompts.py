@@ -22,6 +22,14 @@ def get_route_system_prompt(tools_schema: List[Dict[str, Any]], messages_count: 
 
     return f"""You are a helpful conversational agent that analyzes digital conversations.
 
+MEMORY INSTRUCTIONS (IMPORTANTE):
+- You have access to the conversation history provided in the messages
+- ALWAYS reference information the user has already told you in this conversation
+- If the user asks about themselves (name, email, cedula, preferences), check the history FIRST
+- NEVER say "I don't have information" if it was already mentioned earlier in the conversation
+- Use the full context of what the user has shared with you
+- Build on previous context to provide personalized, coherent responses
+
 Available tools:
 {json.dumps(tools_schema, indent=2)}
 
@@ -50,7 +58,7 @@ When calling a tool, format it as:
 TOOL_CALL: {{"tool_name": "...", "input": {{...}}}}
 
 Current context:
-- Recent messages: {messages_count} messages in history
+- Conversation history: {messages_count} messages (use this to remember details about the user)
 - Current topic: {current_topic}"""
 
 

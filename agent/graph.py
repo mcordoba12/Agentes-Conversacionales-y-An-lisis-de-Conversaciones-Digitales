@@ -492,17 +492,20 @@ def node_generate_response(state: AgentStateDict) -> AgentStateDict:
         response_text = response.content
 
         # ===========================================================================
-        # SEGURIDAD: ENMASCARAR PII EN LA RESPUESTA
+        # SEGURIDAD: DETECTAR PII EN LA RESPUESTA (pero no enmascarar para usuario)
         # ===========================================================================
 
-        masked_response, _ = mask_sensitive_data(response_text)
+        # Solo auditar PII, no enmascarar la respuesta mostrada al usuario
+        _, pii_detected = detect_pii(response_text)
+        if pii_detected and self.audit_logger:
+            self.audit_logger.log_event("pii_detected_in_response", {"content": response_text[:100]})
 
         # Si ya no hay respuesta previa, agregarla
         if not any(isinstance(m, AIMessage) for m in messages[-1:]):
-            state["messages"].append(AIMessage(content=masked_response))
+            state["messages"].append(AIMessage(content=response_text))
         else:
             # Reemplazar última respuesta
-            state["messages"][-1] = AIMessage(content=masked_response)
+            state["messages"][-1] = AIMessage(content=response_text)
 
     except Exception as e:
         state["messages"].append(AIMessage(content=f"Error: {str(e)}"))

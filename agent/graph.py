@@ -363,8 +363,27 @@ def node_route_to_tool(state: AgentStateDict) -> AgentStateDict:
                 "is_tool_call": True
             }
         else:
-            # Sin tool call, agregar respuesta directamente
-            state["messages"].append(AIMessage(content=response.content))
+            # Fallback: Detectar tool calls en formato texto (para Groq/otros modelos)
+            import json
+            import re
+            response_text = response.content
+
+            # Buscar patrón TOOL_CALL: {...}
+            tool_call_match = re.search(r'TOOL_CALL:\s*(\{[^}]+\})', response_text)
+            if tool_call_match:
+                try:
+                    tool_call_json = json.loads(tool_call_match.group(1))
+                    state["last_tool_result"] = {
+                        "tool_name": tool_call_json.get("tool_name"),
+                        "input": tool_call_json.get("input", {}),
+                        "is_tool_call": True
+                    }
+                except json.JSONDecodeError:
+                    # Si no se puede parsear, agregar respuesta directamente
+                    state["messages"].append(AIMessage(content=response_text))
+            else:
+                # Sin tool call, agregar respuesta directamente
+                state["messages"].append(AIMessage(content=response_text))
 
         return state
 

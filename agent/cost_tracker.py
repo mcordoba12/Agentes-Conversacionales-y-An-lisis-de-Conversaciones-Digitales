@@ -24,8 +24,8 @@ class CostTracker:
             "output": 10.00 / 1_000_000,
         },
         "groq-llama": {
-            "input": 0.05 / 1_000_000,    # ~10x más barato
-            "output": 0.08 / 1_000_000,
+            "input": 0.0,    # Groq free tier (unlimited free)
+            "output": 0.0,   # Groq free tier (unlimited free)
         },
     }
 

@@ -31,7 +31,7 @@ if LLM_PROVIDER == "openai" and not OPENAI_API_KEY:
     )
 
 # Model
-LLM_MODEL = "gpt-4o-mini"
+LLM_MODEL = "groq-llama" if LLM_PROVIDER == "groq" else "gpt-4o-mini"
 LLM_TEMPERATURE = 0.7
 
 # Ollama settings (Phase 5 - Free local inference)

@@ -495,10 +495,8 @@ def node_generate_response(state: AgentStateDict) -> AgentStateDict:
         # SEGURIDAD: DETECTAR PII EN LA RESPUESTA (pero no enmascarar para usuario)
         # ===========================================================================
 
-        # Solo auditar PII, no enmascarar la respuesta mostrada al usuario
-        _, pii_detected = detect_pii(response_text)
-        if pii_detected and self.audit_logger:
-            self.audit_logger.log_event("pii_detected_in_response", {"content": response_text[:100]})
+        # Solo registrar la respuesta sin enmascarar
+        # (auditoría ocurre en el método chat() del agente wrapper)
 
         # Si ya no hay respuesta previa, agregarla
         if not any(isinstance(m, AIMessage) for m in messages[-1:]):

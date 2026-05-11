@@ -27,7 +27,7 @@ def trace_propagation(post_id: str) -> Dict[str, Any]:
         response = requests.get(
             f"{MCP_URLS['propagation']}/analisis/propagacion",
             params={"post_id": post_id},
-            timeout=10
+            timeout=30
         )
         return response.json() if response.status_code == 200 else {
             "error": f"Error {response.status_code}",
@@ -43,7 +43,7 @@ def analyze_sentiment() -> Dict[str, Any]:
     try:
         response = requests.get(
             f"{MCP_URLS['sentiment']}/analisis/sentimiento",
-            timeout=10
+            timeout=30
         )
         return response.json() if response.status_code == 200 else {
             "error": f"Error {response.status_code}",
@@ -59,7 +59,7 @@ def get_influence_metrics() -> Dict[str, Any]:
     try:
         response = requests.get(
             f"{MCP_URLS['influence']}/analisis/metricas",
-            timeout=10
+            timeout=30
         )
         return response.json() if response.status_code == 200 else {
             "error": f"Error {response.status_code}",

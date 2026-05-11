@@ -251,20 +251,35 @@ async def set_pattern(pattern_name: str):
 
 @app.get("/metrics")
 async def get_metrics():
-    """Obtener métricas del agente para dashboard"""
+    """Obtener historial completo de métricas para dashboard (Streamlit/Render)"""
+    from pathlib import Path
+    import json
+
+    # Intentar cargar dashboard_metrics.json
+    metrics_file = Path("data/dashboard_metrics.json")
+    if metrics_file.exists():
+        try:
+            with open(metrics_file, 'r', encoding='utf-8') as f:
+                records = json.load(f)
+            return {
+                "status": "ok",
+                "records": records,
+                "total_queries": len(records)
+            }
+        except:
+            pass
+
+    # Fallback: retornar sesión actual
     if not agent:
-        return {
-            "status": "not_initialized",
-            "metrics": {}
-        }
+        return {"status": "not_initialized", "records": []}
 
     return {
         "status": "ok",
-        "session_id": agent.session_id,
-        "last_query_tokens": agent.last_query_tokens if hasattr(agent, 'last_query_tokens') else {"input": 0, "output": 0, "total": 0},
-        "last_query_latency": agent.last_query_latency if hasattr(agent, 'last_query_latency') else 0.0,
-        "memory_size": len(agent.state.get("messages", [])) if hasattr(agent, 'state') else 0,
-        "total_cost": agent.cost_tracker.session_cost if hasattr(agent, 'cost_tracker') and agent.cost_tracker else 0.0,
+        "records": [{
+            "session_id": agent.session_id,
+            "total_tokens": agent.last_query_tokens.get("total", 0) if hasattr(agent, 'last_query_tokens') else 0,
+        }],
+        "total_queries": 1
     }
 
 

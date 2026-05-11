@@ -433,7 +433,15 @@ with metrics_col:
 
     with row2_right:
         st.markdown("#### Quality Scores (Ragas)")
-        quality_data = df[["query_id", "answer_relevancy", "faithfulness"]].dropna()
+        # Check if quality columns exist before trying to access them
+        quality_cols = ["query_id", "answer_relevancy", "faithfulness"]
+        has_quality_cols = all(col in df.columns for col in quality_cols)
+
+        if has_quality_cols:
+            quality_data = df[quality_cols].dropna()
+        else:
+            quality_data = pd.DataFrame()
+
         if not quality_data.empty:
             quality_data["query_id"] = quality_data["query_id"].astype(str)
 

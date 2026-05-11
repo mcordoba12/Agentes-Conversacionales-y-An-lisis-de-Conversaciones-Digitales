@@ -856,7 +856,7 @@ class ConversationalAgent:
 
         # Componentes de Observability (Phase 4)
         self.tracer = LocalTracer() if config.OBS_ENABLED else None
-        self.ragas_eval = RagasEvaluator(llm=llm) if config.OBS_RAGAS_ENABLED else None
+        self.ragas_eval = RagasEvaluator(llm=get_llm()) if config.OBS_RAGAS_ENABLED else None
         self.last_eval_result = None
 
         # Cargar usernames del dataset para detección de PII

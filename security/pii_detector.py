@@ -64,9 +64,9 @@ def detect_pii(text: str) -> Dict[str, List[str]]:
 
     pii_found["phones"] = list(set(pii_found["phones"]))
 
-    # Detectar nombres de usuarios conocidos
+    # Detectar nombres de usuarios conocidos (ignorar strings vacíos)
     for username in KNOWN_USERNAMES:
-        if username.lower() in text.lower():
+        if username.strip() and username.lower() in text.lower():
             pii_found["usernames"].append(username)
 
     return pii_found

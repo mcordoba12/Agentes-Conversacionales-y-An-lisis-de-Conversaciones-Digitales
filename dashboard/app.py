@@ -103,7 +103,7 @@ def send_message_to_agent(question: str) -> dict:
 # DATA LOADERS
 # ============================================================================
 
-@st.cache_data(ttl=5)
+@st.cache_data(ttl=1)  # Refresca cada 1 segundo para actualizar en tiempo real
 def load_metrics():
     """Cargar métricas del agente desde JSON local o API (cloud)"""
 
@@ -137,7 +137,7 @@ def load_metrics():
     return pd.DataFrame()
 
 
-@st.cache_data(ttl=5)
+@st.cache_data(ttl=1)  # Refresca cada 1 segundo para dashboard en tiempo real
 def load_audit_events(limit=20):
     """Cargar eventos de seguridad desde SQLite audit.db"""
     db_path = Path(__file__).parent.parent / "data" / "audit.db"

@@ -903,7 +903,18 @@ class ConversationalAgent:
         if self.rate_limiter:
             allowed, reason = self.rate_limiter.is_allowed(self.user_id)
             if not allowed:
-                return f"Access denied: {reason}"
+                error_msg = f"Access denied: {reason}"
+                return error_msg, {
+                    "query_id": "rate_limited",
+                    "total_tokens": 0,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "total_cost": 0.0,
+                    "latency_ms": 0,
+                    "tool_used": "none",
+                    "answer_relevancy": None,
+                    "faithfulness": None,
+                }
 
         # ===========================================================================
         # LONG-TERM MEMORY: RECUPERAR CONTEXTO DE SESIONES PREVIAS (Phase 3)

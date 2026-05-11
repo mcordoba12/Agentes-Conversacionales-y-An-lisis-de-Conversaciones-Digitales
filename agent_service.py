@@ -6,6 +6,7 @@ Expone el agente como un servicio HTTP para que el dashboard pueda chatear sin t
 import sys
 from pathlib import Path
 from typing import Dict, Any
+import json
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -192,6 +193,22 @@ async def chat(request: ChatRequest):
         if pii_detected:
             query_to_process, _ = mask_sensitive_data(request.query)
             print(f"[SECURITY] PII detected and masked: {pii_found}")
+
+            # Registrar PII detection en audit log
+            try:
+                if audit_logger:
+                    audit_logger.log(
+                        query=request.query,
+                        session_id=agent.session_id if agent else str(uuid.uuid4()),
+                        has_injection=False,
+                        injection_severity="SAFE",
+                        pii_detected=True,
+                        pii_types=json.dumps(pii_found),
+                        tool_called=None
+                    )
+                    print(f"[AUDIT] Logged PII detection to database")
+            except Exception as e:
+                print(f"[WARNING] Could not log PII to audit: {e}")
 
         # Ejecutar chat (devuelve diccionario)
         result = agent.chat(query_to_process)

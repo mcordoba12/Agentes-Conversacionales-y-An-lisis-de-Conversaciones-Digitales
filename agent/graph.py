@@ -492,11 +492,10 @@ def node_generate_response(state: AgentStateDict) -> AgentStateDict:
         response_text = response.content
 
         # ===========================================================================
-        # SEGURIDAD: DETECTAR PII EN LA RESPUESTA (pero no enmascarar para usuario)
+        # SEGURIDAD: NO ENMASCARAR LA RESPUESTA (solo auditar en chat())
         # ===========================================================================
-
-        # Solo registrar la respuesta sin enmascarar
-        # (auditoría ocurre en el método chat() del agente wrapper)
+        # Auditoría de PII ocurre en el método chat() del agente wrapper
+        # Solo pasamos response_text limpio sin modificaciones
 
         # Si ya no hay respuesta previa, agregarla
         if not any(isinstance(m, AIMessage) for m in messages[-1:]):

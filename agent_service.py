@@ -18,6 +18,7 @@ from agent.graph import ConversationalAgent
 from shared import get_loader
 from security.injection_detector import detect_prompt_injection, get_injection_severity
 from security.audit_logger import AuditLogger
+from security.pii_detector import detect_pii, mask_sensitive_data
 import config
 import uuid
 from datetime import datetime
@@ -130,44 +131,70 @@ async def chat(request: ChatRequest):
     # =====================================================================
     # SEGURIDAD: Bloquear inyecciones en el nivel del servicio
     # =====================================================================
-    print(f"[SECURITY] Checking injection...")
-    has_injection = detect_prompt_injection(request.query)
-    injection_severity = get_injection_severity(request.query) if has_injection else "SAFE"
-    print(f"[SECURITY] Result: has_injection={has_injection}, severity={injection_severity}")
+    try:
+        print(f"[SECURITY] Checking injection...")
+        has_injection = detect_prompt_injection(request.query)
+        injection_severity = get_injection_severity(request.query) if has_injection else "SAFE"
+        print(f"[SECURITY] Result: has_injection={has_injection}, severity={injection_severity}")
 
-    if has_injection:
-        blocked_msg = f"🔒 Security: Suspicious input detected and blocked [{injection_severity}]. Please rephrase your question."
-        print(f"[SECURITY] ✓ BLOCKING injection attempt!")
-        print(f"[SECURITY] Injection blocked: {injection_severity} - '{request.question[:50]}...'")
+        if has_injection:
+            blocked_msg = f"Security: Suspicious input detected and blocked [{injection_severity}]. Please rephrase your question."
+            print(f"[SECURITY] BLOCKING injection attempt!")
+            print(f"[SECURITY] Injection blocked: {injection_severity} - '{request.query[:50]}...'")
 
-        # Registrar en audit log
-        try:
-            if audit_logger:
-                session_id = agent.session_id if agent else str(uuid.uuid4())
-                audit_logger.log(
-                    query=request.query,
-                    session_id=session_id,
-                    has_injection=True,
-                    injection_severity=injection_severity,
-                    pii_detected=False,
-                    tool_called=None
-                )
-                print(f"[AUDIT] Logged injection attempt to database")
-        except Exception as e:
-            print(f"[WARNING] Could not log to audit: {e}")
+            # Registrar en audit log
+            try:
+                if audit_logger:
+                    session_id = agent.session_id if agent else str(uuid.uuid4())
+                    audit_logger.log(
+                        query=request.query,
+                        session_id=session_id,
+                        has_injection=True,
+                        injection_severity=injection_severity,
+                        pii_detected=False,
+                        tool_called=None
+                    )
+                    print(f"[AUDIT] Logged injection attempt to database")
+            except Exception as e:
+                print(f"[WARNING] Could not log to audit: {e}")
 
+            return ChatResponse(
+                response=blocked_msg,
+                session_id=agent.session_id if agent else "unknown",
+                tokens={"input": 0, "output": 0, "total": 0},
+                cost=0.0,
+                latency_ms=0.0,
+                success=True
+            )
+    except Exception as e:
+        print(f"[ERROR] Exception during injection detection: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return error response instead of raising exception
         return ChatResponse(
-            response=blocked_msg,
+            response=f"Error in security check: {str(e)}",
             session_id=agent.session_id if agent else "unknown",
             tokens={"input": 0, "output": 0, "total": 0},
             cost=0.0,
             latency_ms=0.0,
-            success=True
+            success=False,
+            error=str(e)
         )
 
     try:
+        # =====================================================================
+        # SEGURIDAD: Enmascarar PII antes de procesar
+        # =====================================================================
+        query_to_process = request.query
+        pii_found = detect_pii(request.query)
+        pii_detected = any([pii_found.get("emails"), pii_found.get("phones"), pii_found.get("ids"), pii_found.get("usernames")])
+
+        if pii_detected:
+            query_to_process, _ = mask_sensitive_data(request.query)
+            print(f"[SECURITY] PII detected and masked: {pii_found}")
+
         # Ejecutar chat (devuelve diccionario)
-        result = agent.chat(request.query)
+        result = agent.chat(query_to_process)
 
         # Extraer datos del resultado
         response_text = result.get("response", "Error: No response") if isinstance(result, dict) else str(result)
@@ -298,11 +325,11 @@ AGENTE CONVERSACIONAL - SERVICE (FastAPI)
 Iniciando servicio en http://localhost:8000
 
 Endpoints disponibles:
-  GET  /              → Health check
-  GET  /status        → Estado del agente
-  POST /chat          → Chatear con el agente
-  POST /reset         → Resetear conversación
-  POST /mode/{name}   → Cambiar patrón (react, reflection, planning, hitl)
+  GET  /              -> Health check
+  GET  /status        -> Estado del agente
+  POST /chat          -> Chatear con el agente
+  POST /reset         -> Resetear conversación
+  POST /mode/{name}   -> Cambiar patrón (react, reflection, planning, hitl)
 
 Para usar con el dashboard:
   1. Abre esta terminal

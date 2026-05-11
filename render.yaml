@@ -15,6 +15,13 @@ services:
         value: groq
       - key: GROQ_API_KEY
         fromSecret: GROQ_API_KEY
+      # MCPs URLs - El agente los llama en Render
+      - key: SENTIMENT_MCP_URL
+        value: https://sentiment-mcp.onrender.com
+      - key: INFLUENCE_MCP_URL
+        value: https://influence-mcp.onrender.com
+      - key: PROPAGATION_MCP_URL
+        value: https://propagation-mcp.onrender.com
     disk:
       name: data
       mountPath: /opt/render/project/data

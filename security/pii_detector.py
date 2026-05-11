@@ -20,6 +20,11 @@ PHONE_PATTERNS = [
     r'\+\d{1,3}\s?\d{1,14}',  # +1234567890
 ]
 
+# Cédula/ID patterns (Colombia, etc.)
+ID_PATTERNS = [
+    r'\b(\d{7,10})\b',  # 7-10 digits (ID/Cédula)
+]
+
 # Nombres de usuarios conocidos del dataset
 # Estos se cargan dinámicamente desde el parquet
 KNOWN_USERNAMES = set()
@@ -42,6 +47,7 @@ def detect_pii(text: str) -> Dict[str, List[str]]:
     pii_found = {
         "emails": [],
         "phones": [],
+        "ids": [],
         "usernames": [],
     }
 
@@ -63,6 +69,15 @@ def detect_pii(text: str) -> Dict[str, List[str]]:
                     pii_found["phones"].append(str(phone_group))
 
     pii_found["phones"] = list(set(pii_found["phones"]))
+
+    # Detectar cédulas/IDs (7-10 dígitos)
+    for id_pattern in ID_PATTERNS:
+        ids = re.findall(id_pattern, text)
+        for id_num in ids:
+            if len(str(id_num)) >= 7:
+                pii_found["ids"].append(str(id_num))
+
+    pii_found["ids"] = list(set(pii_found["ids"]))
 
     # Detectar nombres de usuarios conocidos (ignorar strings vacíos)
     for username in KNOWN_USERNAMES:
@@ -101,6 +116,11 @@ def mask_sensitive_data(text: str, replace_char: str = "*") -> Tuple[str, Dict[s
     for phone in pii_found["phones"]:
         masked_phone = f"***-***-{phone[-4:]}"
         masked_text = masked_text.replace(phone, masked_phone)
+
+    # Enmascarar cédulas/IDs
+    for id_num in pii_found["ids"]:
+        masked_id = f"***-***-{id_num[-4:]}"
+        masked_text = masked_text.replace(id_num, masked_id)
 
     # Enmascarar nombres de usuario
     for username in pii_found["usernames"]:
